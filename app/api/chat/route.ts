@@ -22,7 +22,6 @@ function normalizeMessages(input: unknown): ModelMessage[] {
     })
     .map((item) => {
       const content = item.content.slice(0, MAX_MESSAGE_CHARS);
-      if (item.role === "system") return { role: "system", content } as const;
       if (item.role === "assistant") return { role: "assistant", content } as const;
       if (item.role === "tool") {
         return {
@@ -57,7 +56,6 @@ export async function POST(request: Request) {
     const authHint = /auth|api.?key|credential|forbidden|401|403/i.test(message)
       ? " Configure Vercel AI Gateway for this project or set AI_GATEWAY_API_KEY for local development."
       : "";
-
     return Response.json({ error: `${message}${authHint}` }, { status: 503 });
   }
 }
