@@ -1,50 +1,10 @@
-import type {
-  Conversation,
-  Message
-} from "@/types/chat";
+import type { Conversation, MemoryItem, Message } from "@/types/chat";
 
-const MAX_CONTEXT_MESSAGES = 24;
-
-const MAX_CONTEXT_CHARS = 28000;
-
-export function buildContext(
-  conversation: Conversation,
-  systemPrompt: string
-): Message[] {
-  const selected: Message[] = [
-    {
-      id: "system",
-      role: "system",
-      content: systemPrompt,
-      createdAt: 0
-    }
-  ];
-
-  let chars =
-    systemPrompt.length;
-
-  for (const message of [
-    ...conversation.messages
-  ].reverse()) {
-    const next =
-      chars + message.content.length;
-
-    if (
-      selected.length >=
-        MAX_CONTEXT_MESSAGES + 1 ||
-      next > MAX_CONTEXT_CHARS
-    ) {
-      break;
-    }
-
-    selected.push(message);
-
-    chars = next;
-  }
-
-  return selected
-    .slice(0, 1)
-    .concat(
-      selected.slice(1).reverse()
-    );
+export function buildContext(conversation: Conversation, systemPrompt: string, memories: MemoryItem[] = []): Message[] {
+  const now = Date.now();
+  const activeMemories = memories.filter((memory) => memory.approved && (!memory.expiresAt || memory.expiresAt > now)).slice(-20);
+  const memoryText = activeMemories.length ? `\nApproved memory (use only when relevant):\n${activeMemories.map((m) => `- ${m.text}`).join("\n")}` : "";
+  const system: Message = { id: "system", role: "system", content: `${systemPrompt}${memoryText}`, createdAt: now };
+  const history = conversation.messages.filter((m) => m.role !== "system").slice(-80).map((message) => message.role === "tool" ? ({ ...message, role: "user", content: `[Trusted tool envelope containing untrusted external data]\n${message.content}` } satisfies Message) : message);
+  return [system, ...history];
 }
