@@ -28,8 +28,10 @@ function createGenerator() {
     device: "wasm",
     dtype: "q4",
     progress_callback: (report) => {
-      const progress = typeof report.progress === "number" ? report.progress : 0;
-      scope.postMessage({ type: "progress", id: "__load__", value: progress });
+      if (report.status === "progress" || report.status === "progress_total") {
+        const progress = Math.max(0, Math.min(100, report.progress));
+        scope.postMessage({ type: "progress", id: "__load__", value: progress / 100 });
+      }
     },
   });
 }
