@@ -7,7 +7,7 @@ let dbPromise: Promise<IDBDatabase> | null = null;
 function openDb(): Promise<IDBDatabase> {
   if (typeof window === "undefined") return Promise.reject(new Error("Browser storage is unavailable."));
   if (dbPromise) return dbPromise;
-  dbPromise = new Promise((resolve, reject) => {
+  dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = () => {
       const db = request.result;
@@ -15,7 +15,8 @@ function openDb(): Promise<IDBDatabase> {
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error ?? new Error("IndexedDB open failed."));
-  }).catch((error) => { dbPromise = null; throw error; });
+  });
+  dbPromise = dbPromise.catch((error) => { dbPromise = null; throw error; });
   return dbPromise;
 }
 
@@ -53,5 +54,13 @@ export const memoryStore = {
   async saveSnapshot(conversations: Conversation[], settings: AppSettings) { await write("snapshot", { conversations, settings, createdAt: Date.now() }); },
   async loadSnapshot() { return read<{ conversations: Conversation[]; settings: AppSettings; createdAt: number }>("snapshot"); },
   async clearTemporary() { await write("memories", (await read<MemoryItem[]>("memories") ?? []).filter((m) => !m.expiresAt || m.expiresAt > Date.now())); },
-  async clearAll() { const db = await openDb(); await new Promise<void>((resolve, reject) => { const tx = db.transaction(STORE_NAME, "readwrite"); tx.objectStore(STORE_NAME).clear(); tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error ?? new Error("Storage clear failed.")); }); }
+  async clearAll() {
+    const db = await openDb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      tx.objectStore(STORE_NAME).clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error ?? new Error("Storage clear failed."));
+    });
+  },
 };
