@@ -1,7 +1,11 @@
 export type Role = "system" | "user" | "assistant" | "tool";
 export type MessageStatus = "complete" | "streaming" | "error";
 
-export interface Citation { title: string; url: string; snippet?: string; }
+export interface Citation {
+  title: string;
+  url: string;
+  snippet?: string;
+}
 
 export interface Message {
   id: string;
@@ -10,7 +14,7 @@ export interface Message {
   createdAt: number;
   status?: MessageStatus;
   branchId?: string;
-  source?: "local" | "web" | "tool";
+  source?: "local" | "web" | "tool" | "cloud";
   citations?: Citation[];
 }
 
