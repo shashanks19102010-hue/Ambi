@@ -9,7 +9,11 @@ export default function MessageBubble({ message }: { message: Message }) {
     ? "CLOUD AI"
     : message.source === "web"
       ? "WEB RESEARCH"
-      : null;
+      : message.source === "tool"
+        ? "TOOL"
+        : message.source === "local"
+          ? "LOCAL AI"
+          : null;
 
   return (
     <article className={`message ${message.role}`}>
