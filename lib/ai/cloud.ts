@@ -14,18 +14,27 @@ export interface CloudStreamOptions {
 }
 
 export async function streamCloudChat({ messages, signal, onDelta }: CloudStreamOptions): Promise<void> {
-  let response: Response;
+  if (signal?.aborted) {
+    throw new CloudInferenceError("Cloud generation stopped.", "ABORTED");
+  }
 
+  let response: Response;
   try {
     response = await fetch("/api/chat", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Accept: "text/plain" },
+      cache: "no-store",
       body: JSON.stringify({ messages }),
       signal,
     });
   } catch (error) {
-    if (signal?.aborted) throw new CloudInferenceError("Cloud generation stopped.", "ABORTED");
-    throw new CloudInferenceError(error instanceof Error ? error.message : "Network request failed.", "NETWORK_ERROR");
+    if (signal?.aborted) {
+      throw new CloudInferenceError("Cloud generation stopped.", "ABORTED");
+    }
+    throw new CloudInferenceError(
+      error instanceof Error ? error.message : "Network request failed.",
+      "NETWORK_ERROR",
+    );
   }
 
   if (!response.ok) {
@@ -36,20 +45,35 @@ export async function streamCloudChat({ messages, signal, onDelta }: CloudStream
     } catch {
       // Keep the generic HTTP error when the server did not return JSON.
     }
-    throw new CloudInferenceError(detail, "REMOTE_ERROR");
+    throw new CloudInferenceError(detail, response.status === 401 || response.status === 403 ? "AUTH_ERROR" : "REMOTE_ERROR");
   }
 
-  if (!response.body) throw new CloudInferenceError("Cloud AI returned an empty stream.", "EMPTY_STREAM");
+  if (!response.body) {
+    throw new CloudInferenceError("Cloud AI returned an empty stream.", "EMPTY_STREAM");
+  }
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
 
   try {
     while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      if (value) onDelta(decoder.decode(value, { stream: true }));
+      if (signal?.aborted) {
+        await reader.cancel().catch(() => undefined);
+        throw new CloudInferenceError("Cloud generation stopped.", "ABORTED");
+      }
+
+      try {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (value) onDelta(decoder.decode(value, { stream: true }));
+      } catch (error) {
+        if (signal?.aborted) {
+          throw new CloudInferenceError("Cloud generation stopped.", "ABORTED");
+        }
+        throw error;
+      }
     }
+
     const tail = decoder.decode();
     if (tail) onDelta(tail);
   } finally {
