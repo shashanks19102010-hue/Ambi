@@ -1,147 +1,23 @@
 "use client";
+import type { AppSettings, CapabilityState, HealthState } from "@/types/chat";
+import { MODEL_CATALOG } from "@/lib/constants";
 
-import type { AppSettings } from "@/types/chat";
-
-export default function SettingsModal({
-  settings,
-  onChange,
-  onClose
-}: {
-  settings: AppSettings;
-  onChange: (next: AppSettings) => void;
-  onClose: () => void;
-}) {
-  return (
-    <div
-      className="modal-backdrop"
-      onMouseDown={(event) =>
-        event.currentTarget === event.target &&
-        onClose()
-      }
-    >
-      <div className="modal">
-        <h2>Ambi settings</h2>
-
-        <div className="setting">
-          <span>
-            Web research
-
-            <div className="small">
-              Only sends queries externally when enabled.
-            </div>
-          </span>
-
-          <input
-            className="toggle"
-            type="checkbox"
-            checked={settings.webSearch}
-            onChange={(event) =>
-              onChange({
-                ...settings,
-                webSearch: event.target.checked
-              })
-            }
-          />
-        </div>
-
-        <div className="setting">
-          <span>
-            Local memory
-
-            <div className="small">
-              Conversation data stays in browser storage.
-            </div>
-          </span>
-
-          <input
-            className="toggle"
-            type="checkbox"
-            checked={settings.memoryEnabled}
-            onChange={(event) =>
-              onChange({
-                ...settings,
-                memoryEnabled: event.target.checked
-              })
-            }
-          />
-        </div>
-
-        <div className="setting">
-          <span>
-            Auto recovery
-          </span>
-
-          <input
-            className="toggle"
-            type="checkbox"
-            checked={settings.autoRecover}
-            onChange={(event) =>
-              onChange({
-                ...settings,
-                autoRecover: event.target.checked
-              })
-            }
-          />
-        </div>
-
-        <div className="setting">
-          <span>
-            Safety mode
-          </span>
-
-          <select
-            value={settings.safetyMode}
-            onChange={(event) =>
-              onChange({
-                ...settings,
-                safetyMode:
-                  event.target.value as AppSettings[
-                    "safetyMode"
-                  ]
-              })
-            }
-          >
-            <option value="strict">
-              Strict
-            </option>
-
-            <option value="balanced">
-              Balanced
-            </option>
-          </select>
-        </div>
-
-        <div className="setting">
-          <span>
-            Local model
-          </span>
-
-          <select
-            value={settings.model}
-            onChange={(event) =>
-              onChange({
-                ...settings,
-                model: event.target.value
-              })
-            }
-          >
-            <option value="LFM2.5-350M-Instruct-q4f16_1-MLC">
-              LFM2.5 350M
-            </option>
-
-            <option value="LFM2.5-230M-Instruct-q4f16_1-MLC">
-              LFM2.5 230M
-            </option>
-          </select>
-        </div>
-
-        <button
-          className="new-chat"
-          onClick={onClose}
-        >
-          Done
-        </button>
-      </div>
+export default function SettingsModal({ settings, onChange, capabilities, health, onClose }: { settings: AppSettings; onChange: (value: AppSettings) => void; capabilities: CapabilityState | null; health: HealthState; onClose: () => void }) {
+  const set = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => onChange({ ...settings, [key]: value });
+  return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <div className="modal-head"><div><span className="eyebrow">AMBI CONTROL CENTER</span><h2 id="settings-title">Settings & Privacy</h2></div><button className="close-btn" onClick={onClose} aria-label="Close">×</button></div>
+    <div className="settings-grid">
+      <label className="field"><span>Model</span><select value={settings.model} onChange={(e) => set("model", e.target.value)}>{MODEL_CATALOG.map((model) => <option key={model.id} value={model.id}>{model.name} · {model.sizeLabel}</option>)}</select></label>
+      <label className="field"><span>Response style</span><select value={settings.responseStyle} onChange={(e) => set("responseStyle", e.target.value as AppSettings["responseStyle"])}><option value="concise">Concise</option><option value="normal">Normal</option><option value="detailed">Detailed</option><option value="expert">Expert</option></select></label>
+      <label className="field"><span>Language</span><select value={settings.language} onChange={(e) => set("language", e.target.value as AppSettings["language"])}><option value="auto">Auto</option><option value="en">English</option><option value="hi">Hindi</option><option value="hinglish">Hinglish</option></select></label>
+      <label className="field"><span>Theme</span><select value={settings.theme} onChange={(e) => set("theme", e.target.value as AppSettings["theme"])}><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option><option value="oled">OLED Dark</option></select></label>
     </div>
-  );
+    <div className="settings-card"><div><strong>Web research</strong><p>Uses Tavily through Ambi's server route. Results are treated as untrusted data.</p></div><input className="toggle" type="checkbox" checked={settings.webSearch && !settings.localOnly} onChange={(e) => set("webSearch", e.target.checked)} aria-label="Enable web research" /></div>
+    <div className="settings-card"><div><strong>Local Only Mode</strong><p>Disables network-dependent tools. Local inference can still work when the model is cached.</p></div><input className="toggle" type="checkbox" checked={settings.localOnly} onChange={(e) => set("localOnly", e.target.checked)} aria-label="Enable local-only mode" /></div>
+    <div className="settings-card"><div><strong>Memory</strong><p>Approved memories are stored locally. Ambi does not silently save sensitive information.</p></div><input className="toggle" type="checkbox" checked={settings.memoryEnabled} onChange={(e) => set("memoryEnabled", e.target.checked)} aria-label="Enable memory" /></div>
+    <div className="settings-card"><div><strong>Temporary Chat</strong><p>Skips normal conversation persistence and project memory for this mode.</p></div><input className="toggle" type="checkbox" checked={settings.temporaryChat} onChange={(e) => set("temporaryChat", e.target.checked)} aria-label="Enable temporary chat" /></div>
+    <div className="settings-card"><div><strong>Strict safety</strong><p>Prefers safer handling of risky requests, external data, and consequential actions.</p></div><select className="inline-select" value={settings.safetyMode} onChange={(e) => set("safetyMode", e.target.value as AppSettings["safetyMode"])}><option value="strict">Strict</option><option value="balanced">Balanced</option></select></div>
+    <div className="diagnostics"><div className="diag-header"><strong>Ambi Diagnostics</strong><span>{health.safeMode ? "Recovery active" : "Healthy"}</span></div><div className="diag-grid"><span>WebGPU <b>{capabilities?.webgpu ? "Available" : "Unavailable"}</b></span><span>CPU <b>{capabilities?.cores ?? "—"} cores</b></span><span>Device <b>{capabilities?.tier ?? "Detecting"}</b></span><span>Network <b>{health.network}</b></span><span>Storage <b>{health.storage}</b></span><span>Recovery <b>{health.recovery}</b></span></div></div>
+    <div className="modal-footer"><span className="small">Never put API keys in client code or Git commits.</span><button className="primary-btn" onClick={onClose}>Done</button></div>
+  </section></div>;
 }
