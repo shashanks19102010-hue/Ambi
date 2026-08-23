@@ -38,7 +38,10 @@ export default function AmbiShell() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
-  const [caps, setCaps] = useState<CapabilityState | null>(null);
+  const [caps] = useState<CapabilityState | null>(() => {
+    if (typeof window === "undefined") return null;
+    return detectCapabilities();
+  });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -86,7 +89,6 @@ export default function AmbiShell() {
     window.addEventListener("ambi:runtime", onRuntime);
     window.addEventListener("ambi:open-history", onOpenHistory);
     window.addEventListener("ambi:new-chat", onNewChat);
-    setCaps(detectCapabilities());
 
     const updateNetwork = () => {
       setHealth((current) => ({ ...current, network: navigator.onLine ? "online" : "offline" }));
