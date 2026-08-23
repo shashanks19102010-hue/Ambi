@@ -7,7 +7,7 @@ export const STORE_NAME = "state";
 export const MAX_MESSAGE_LENGTH = 12_000;
 export const MAX_CONVERSATIONS = 500;
 
-export const DEFAULT_MODEL_ID = "Llama-3.2-1B-Instruct-q4f16_1-MLC";
+export const DEFAULT_MODEL_ID = "SmolLM2-360M-Instruct-q4f32_1-MLC";
 export const WASM_FALLBACK_MODEL_ID = "wasm:SmolLM2-360M-Instruct";
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -27,9 +27,29 @@ export const DEFAULT_SETTINGS: AppSettings = {
 
 export const MODEL_CATALOG = [
   {
+    id: "SmolLM2-360M-Instruct-q4f32_1-MLC",
+    name: "SmolLM2 360M · GPU · Recommended",
+    sizeLabel: "~580 MB VRAM",
+    quantization: "q4f32_1",
+    tier: "Basic",
+    contextWindow: 4096,
+    lowResource: true,
+    runtime: "webgpu",
+  },
+  {
+    id: "SmolLM2-360M-Instruct-q4f16_1-MLC",
+    name: "SmolLM2 360M · GPU · F16",
+    sizeLabel: "~376 MB VRAM",
+    quantization: "q4f16_1",
+    tier: "Basic",
+    contextWindow: 4096,
+    lowResource: true,
+    runtime: "webgpu",
+  },
+  {
     id: "Llama-3.2-1B-Instruct-q4f16_1-MLC",
     name: "Llama 3.2 1B Instruct · GPU",
-    sizeLabel: "~700 MB",
+    sizeLabel: "~879 MB VRAM",
     quantization: "q4f16_1",
     tier: "Standard",
     contextWindow: 4096,
@@ -38,8 +58,8 @@ export const MODEL_CATALOG = [
   },
   {
     id: "Llama-3.2-1B-Instruct-q4f32_1-MLC",
-    name: "Llama 3.2 1B Instruct · GPU",
-    sizeLabel: "~900 MB",
+    name: "Llama 3.2 1B Instruct · GPU · F32",
+    sizeLabel: "~1.1 GB VRAM",
     quantization: "q4f32_1",
     tier: "Standard",
     contextWindow: 4096,
@@ -49,7 +69,7 @@ export const MODEL_CATALOG = [
   {
     id: "Llama-3.2-3B-Instruct-q4f16_1-MLC",
     name: "Llama 3.2 3B Instruct · GPU",
-    sizeLabel: "~2.3 GB",
+    sizeLabel: "~2.3 GB VRAM",
     quantization: "q4f16_1",
     tier: "Powerful",
     contextWindow: 4096,
@@ -58,8 +78,8 @@ export const MODEL_CATALOG = [
   },
   {
     id: "Llama-3.2-3B-Instruct-q4f32_1-MLC",
-    name: "Llama 3.2 3B Instruct · GPU",
-    sizeLabel: "~3 GB",
+    name: "Llama 3.2 3B Instruct · GPU · F32",
+    sizeLabel: "~3 GB VRAM",
     quantization: "q4f32_1",
     tier: "High Performance",
     contextWindow: 4096,
