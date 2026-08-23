@@ -8,6 +8,16 @@ export class LocalInferenceError extends Error {
   }
 }
 
+interface WebGPUBridge {
+  requestAdapter: () => Promise<unknown>;
+}
+
+function getWebGPU(): WebGPUBridge | null {
+  if (typeof navigator === "undefined") return null;
+  const candidate = (navigator as Navigator & { gpu?: WebGPUBridge }).gpu;
+  return candidate ?? null;
+}
+
 export interface LocalEngine {
   model: string;
   chat(messages: Message[]): AsyncGenerator<string>;
@@ -39,14 +49,24 @@ async function createEngine(model: string): Promise<LocalEngine> {
     throw new LocalInferenceError("Local AI can only run in the browser.", "SSR_CONTEXT");
   }
 
-  if (!("gpu" in navigator)) {
+  const gpu = getWebGPU();
+  if (!gpu) {
     throw new LocalInferenceError(
       "WebGPU is unavailable in this browser. Use a current browser with WebGPU enabled for local AI.",
       "WEBGPU_UNAVAILABLE",
     );
   }
 
-  const adapter = await navigator.gpu.requestAdapter();
+  let adapter: unknown;
+  try {
+    adapter = await gpu.requestAdapter();
+  } catch {
+    throw new LocalInferenceError(
+      "WebGPU could not initialize on this device.",
+      "WEBGPU_INITIALIZATION_FAILED",
+    );
+  }
+
   if (!adapter) {
     throw new LocalInferenceError(
       "No compatible GPU adapter was found for local AI on this device.",
@@ -65,12 +85,20 @@ async function createEngine(model: string): Promise<LocalEngine> {
     );
   }
 
-  const created = await webllm.CreateMLCEngine(actualModel, {
-    initProgressCallback: (report) => {
-      const progress = typeof report.progress === "number" ? report.progress : 0;
-      window.dispatchEvent(new CustomEvent("ambi:model-progress", { detail: progress }));
-    },
-  });
+  let created;
+  try {
+    created = await webllm.CreateMLCEngine(actualModel, {
+      initProgressCallback: (report) => {
+        const progress = typeof report.progress === "number" ? report.progress : 0;
+        window.dispatchEvent(new CustomEvent("ambi:model-progress", { detail: progress }));
+      },
+    });
+  } catch {
+    throw new LocalInferenceError(
+      `Ambi could not load ${actualModel}. Try the smaller supported model or clear a failed model cache and retry.`,
+      "MODEL_LOAD_FAILED",
+    );
+  }
 
   return {
     model: actualModel,
