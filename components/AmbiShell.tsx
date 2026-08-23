@@ -6,7 +6,7 @@ import { DEFAULT_SETTINGS, SYSTEM_PROMPT } from "@/lib/constants";
 import { uid } from "@/lib/id";
 import { memoryStore } from "@/lib/memory/store";
 import { buildContext } from "@/lib/memory/context";
-import { getLocalEngine, LocalInferenceError } from "@/lib/ai/engine";
+import { getLocalEngine, LocalInferenceError, type LocalEngine } from "@/lib/ai/engine";
 import { detectCapabilities } from "@/lib/ai/capabilities";
 import { checkUserMessage } from "@/lib/security/safety";
 import { runOptionalTool } from "@/lib/tools/router";
@@ -41,6 +41,7 @@ export default function AmbiShell() {
   const [busy, setBusy] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [modelProgress, setModelProgress] = useState<number | null>(null);
+  const [runtime, setRuntime] = useState<"webgpu" | "wasm" | "unknown">("unknown");
   const [health, setHealth] = useState<HealthState>({
     inference: "unavailable",
     storage: "ready",
@@ -51,6 +52,7 @@ export default function AmbiShell() {
     webSearch: "disabled",
   });
   const stopRef = useRef(false);
+  const engineRef = useRef<LocalEngine | null>(null);
 
   const active = useMemo(
     () => conversations.find((conversation) => conversation.id === activeId) ?? null,
@@ -62,7 +64,12 @@ export default function AmbiShell() {
       const progress = (event as CustomEvent<number>).detail;
       setModelProgress(typeof progress === "number" ? Math.max(0, Math.min(1, progress)) : null);
     };
+    const onRuntime = (event: Event) => {
+      const value = (event as CustomEvent<"webgpu" | "wasm">).detail;
+      if (value === "webgpu" || value === "wasm") setRuntime(value);
+    };
     window.addEventListener("ambi:model-progress", onProgress);
+    window.addEventListener("ambi:runtime", onRuntime);
 
     const detected = detectCapabilities();
     setCaps(detected);
@@ -102,6 +109,7 @@ export default function AmbiShell() {
 
     return () => {
       window.removeEventListener("ambi:model-progress", onProgress);
+      window.removeEventListener("ambi:runtime", onRuntime);
       window.removeEventListener("online", updateNetwork);
       window.removeEventListener("offline", updateNetwork);
     };
@@ -143,7 +151,9 @@ export default function AmbiShell() {
       const blocked: Message = { id: uid("msg"), role: "assistant", content: decision.reason ?? "I can't help with that request.", createdAt: Date.now(), status: "complete", source: "local" };
       const chatId = activeId ?? uid("chat");
       const current = conversations.find((chat) => chat.id === chatId) ?? makeConversation(chatId, titleFor(cleanText));
-      const next = current.messages.length === 0 ? { ...current, title: titleFor(cleanText), messages: [blocked], updatedAt: Date.now() } : { ...current, messages: [...current.messages, blocked], updatedAt: Date.now() };
+      const next = current.messages.length === 0
+        ? { ...current, title: titleFor(cleanText), messages: [blocked], updatedAt: Date.now() }
+        : { ...current, messages: [...current.messages, blocked], updatedAt: Date.now() };
       setConversations((previous) => previous.some((chat) => chat.id === chatId) ? previous.map((chat) => chat.id === chatId ? next : chat) : [next, ...previous]);
       setActiveId(chatId);
       return;
@@ -168,6 +178,7 @@ export default function AmbiShell() {
 
     setBusy(true);
     stopRef.current = false;
+    engineRef.current = null;
     setModelProgress(null);
     setHealth((currentHealth) => ({ ...currentHealth, inference: "loading", safeMode: false, recovery: "idle" }));
 
@@ -195,12 +206,27 @@ export default function AmbiShell() {
         : conversationWithUser;
       const messagesForModel = buildContext(contextConversation, SYSTEM_PROMPT, memories);
       const engine = await getLocalEngine(settings.model);
+      engineRef.current = engine;
+      setRuntime(engine.runtime);
       setModelProgress(1);
-      setHealth((currentHealth) => ({ ...currentHealth, inference: "ready" }));
+      setHealth((currentHealth) => ({ ...currentHealth, inference: "ready", safeMode: false }));
+
+      if (stopRef.current) {
+        await engine.stop();
+        setConversations((previous) => previous.map((chat) => chat.id === chatId ? {
+          ...chat,
+          updatedAt: Date.now(),
+          messages: chat.messages.map((message) => message.id === responseId ? { ...message, content: "Generation stopped.", status: "complete" } : message),
+        } : chat));
+        return;
+      }
 
       let combined = "";
       for await (const delta of engine.chat(messagesForModel)) {
-        if (stopRef.current) break;
+        if (stopRef.current) {
+          await engine.stop();
+          break;
+        }
         combined += delta;
         setConversations((previous) => previous.map((chat) => chat.id === chatId ? {
           ...chat,
@@ -218,9 +244,7 @@ export default function AmbiShell() {
     } catch (error) {
       const code = error instanceof LocalInferenceError ? error.code : "UNKNOWN";
       const message = error instanceof Error ? error.message : "The local AI engine could not start.";
-      const helpful = cleanText.toLowerCase().match(/^(hi|hello|hey|hii|namaste)[!. ,]*$/)
-        ? `Hi! I’m Ambi. I’m ready, but the local model could not start on this device yet.\n\n${message}\n\nOpen Settings → Models to choose a supported model or check WebGPU. (code: ${code})`
-        : `I couldn't generate that response because the local AI engine could not start.\n\n${message}\n\nYou can retry or check Settings → Models. (code: ${code})`;
+      const helpful = `I couldn't generate that response because Ambi's on-device AI runtime could not start.\n\n${message}\n\nOpen Settings → Models to select Device CPU if GPU inference is unavailable. (code: ${code})`;
       setHealth((currentHealth) => ({ ...currentHealth, inference: "error", safeMode: true, recovery: "safe", lastRecoveryAt: Date.now() }));
       setConversations((previous) => previous.map((chat) => chat.id === chatId ? {
         ...chat,
@@ -230,17 +254,25 @@ export default function AmbiShell() {
     } finally {
       setModelProgress(null);
       setBusy(false);
+      engineRef.current = null;
     }
   };
 
   const stop = () => {
     stopRef.current = true;
+    void engineRef.current?.stop();
   };
+
+  const runtimeLabel = runtime === "webgpu" ? "Local GPU" : runtime === "wasm" ? "Local CPU" : caps?.wasm ? "Local AI" : "AI unavailable";
 
   return <div className="app">
     <Sidebar conversations={conversations} activeId={activeId} onNew={createChat} onSelect={setActiveId} onHistory={() => setHistoryOpen(true)} onSettings={() => setSettingsOpen(true)} onTogglePin={(id) => { const chat = conversations.find((item) => item.id === id); mutateChat(id, { pinned: !chat?.pinned }); }} onToggleArchive={(id) => { const chat = conversations.find((item) => item.id === id); mutateChat(id, { archived: !chat?.archived }); }} onDelete={deleteChat} />
     <main className="main">
-      <header className="topbar"><div className="mobile-brand"><img src="/ambi-logo.png" alt="Ambi" /><strong>Ambi</strong></div><div className="model-chip">{settings.model.replace(/-MLC$/, "")}</div><div className="top-status"><span className={`state-dot ${health.network === "online" ? "online" : "offline"}`} />{health.network === "online" ? "Online" : "Offline"}<span className="sep">·</span>{health.safeMode ? "Needs attention" : health.inference === "ready" ? "Local AI ready" : modelProgress !== null ? `Loading ${Math.round(modelProgress * 100)}%` : caps?.webgpu ? "Local AI available" : "WebGPU unavailable"}<button onClick={() => setSettingsOpen(true)} className="icon-btn" aria-label="Open settings">⚙</button></div></header>
+      <header className="topbar">
+        <div className="mobile-brand"><img src="/ambi-logo.png" alt="Ambi" /><strong>Ambi</strong></div>
+        <div className="model-chip">{runtimeLabel} · {settings.model.includes("SmolLM2") ? "SmolLM2 360M" : settings.model.replace(/-MLC$/, "")}</div>
+        <div className="top-status"><span className={`state-dot ${health.network === "online" ? "online" : "offline"}`} />{health.network === "online" ? "Online" : "Offline"}<span className="sep">·</span>{health.safeMode ? "Needs attention" : health.inference === "ready" ? runtimeLabel : modelProgress !== null ? `Loading ${Math.round(modelProgress * 100)}%` : caps?.wasm ? "Device AI ready" : "AI unavailable"}<button onClick={() => setSettingsOpen(true)} className="icon-btn" aria-label="Open settings">⚙</button></div>
+      </header>
       {modelProgress !== null && <div style={{ height: 2, background: "var(--line)", overflow: "hidden" }}><div style={{ height: "100%", width: `${Math.round(modelProgress * 100)}%`, background: "var(--accent)", transition: "width .2s ease" }} /></div>}
       {health.safeMode && <div className="recovery-banner"><strong>Ambi recovered automatically.</strong><span>Your conversation is safe; the local model needs attention.</span><button onClick={() => setHealth((current) => ({ ...current, safeMode: false, recovery: "idle" }))}>Dismiss</button></div>}
       <section className="messages">{active?.messages.length ? active.messages.map((message) => <MessageBubble key={message.id} message={message} />) : <EmptyState onSuggestion={send} />}</section>
