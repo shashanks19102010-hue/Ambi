@@ -7,6 +7,9 @@ export default function manifest() {
     display: "standalone",
     background_color: "#fbfbfa",
     theme_color: "#11110f",
-    icons: [{ src: "/ambi-logo.png", sizes: "512x512", type: "image/png", purpose: "any maskable" }]
+    icons: [
+      { src: "/ambi-logo-192.svg", sizes: "192x192", type: "image/svg+xml", purpose: "any maskable" },
+      { src: "/ambi-logo.png", sizes: "512x512", type: "image/png", purpose: "any maskable" }
+    ]
   };
 }
