@@ -4,6 +4,7 @@ import type { AppSettings, CapabilityState, HealthState } from "@/types/chat";
 import { MODEL_CATALOG } from "@/lib/constants";
 import MemoryPanel from "@/components/MemoryPanel";
 import ModelManagerPanel from "@/components/ModelManagerPanel";
+import ControlPanelStyles from "@/components/ControlPanelStyles";
 
 export default function SettingsModal({ settings, onChange, capabilities, health, onClose }: { settings: AppSettings; onChange: (value: AppSettings) => void; capabilities: CapabilityState | null; health: HealthState; onClose: () => void }) {
   const set = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => onChange({ ...settings, [key]: value });
@@ -11,6 +12,7 @@ export default function SettingsModal({ settings, onChange, capabilities, health
   const [modelsOpen, setModelsOpen] = useState(false);
 
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <ControlPanelStyles />
     <div className="modal-head"><div><span className="eyebrow">AMBI CONTROL CENTER</span><h2 id="settings-title">Settings &amp; Privacy</h2></div><button className="close-btn" onClick={onClose} aria-label="Close">×</button></div>
     <div className="settings-grid">
       <label className="field"><span>Local AI runtime</span><select value={settings.model} onChange={(e) => set("model", e.target.value)}>{MODEL_CATALOG.map((model) => <option key={model.id} value={model.id}>{model.name} · {model.sizeLabel}</option>)}</select></label>
