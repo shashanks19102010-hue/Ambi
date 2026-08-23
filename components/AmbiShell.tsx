@@ -18,6 +18,7 @@ import EmptyState from "@/components/EmptyState";
 import MessageBubble from "@/components/MessageBubble";
 import SettingsModal from "@/components/SettingsModal";
 import HistoryPanel from "@/components/HistoryPanel";
+import MobileControls from "@/components/MobileControls";
 
 function titleFor(text: string) {
   const clean = text.trim().replace(/\s+/g, " ");
@@ -68,9 +69,17 @@ export default function AmbiShell() {
       const value = (event as CustomEvent<"webgpu" | "wasm">).detail;
       if (value === "webgpu" || value === "wasm") setRuntime(value);
     };
+    const onOpenHistory = () => setHistoryOpen(true);
+    const onNewChat = () => {
+      const chat = makeConversation(uid("chat"));
+      setConversations((previous) => [chat, ...previous]);
+      setActiveId(chat.id);
+    };
 
     window.addEventListener("ambi:model-progress", onProgress);
     window.addEventListener("ambi:runtime", onRuntime);
+    window.addEventListener("ambi:open-history", onOpenHistory);
+    window.addEventListener("ambi:new-chat", onNewChat);
     setCaps(detectCapabilities());
 
     const updateNetwork = () => {
@@ -109,6 +118,8 @@ export default function AmbiShell() {
     return () => {
       window.removeEventListener("ambi:model-progress", onProgress);
       window.removeEventListener("ambi:runtime", onRuntime);
+      window.removeEventListener("ambi:open-history", onOpenHistory);
+      window.removeEventListener("ambi:new-chat", onNewChat);
       window.removeEventListener("online", updateNetwork);
       window.removeEventListener("offline", updateNetwork);
     };
@@ -152,7 +163,6 @@ export default function AmbiShell() {
 
   const send = async (text: string) => {
     if (busy || !text.trim()) return;
-
     const cleanText = text.trim();
     const decision = checkUserMessage(cleanText);
     const chatId = activeId ?? uid("chat");
@@ -214,7 +224,6 @@ export default function AmbiShell() {
         ? { ...conversationWithUser, messages: [...conversationWithUser.messages, { id: uid("tool"), role: "tool", content: toolText, createdAt: Date.now(), status: "complete", source: "web" }] }
         : conversationWithUser;
       const messagesForModel = buildContext(contextConversation, SYSTEM_PROMPT, memories);
-
       const networkAvailable = typeof navigator !== "undefined" && navigator.onLine;
       const cloudFirst = !settings.localOnly && networkAvailable && (!caps || !caps.webgpu || caps.tier === "Basic");
       let combined = "";
@@ -320,6 +329,7 @@ export default function AmbiShell() {
         <section className="messages">{active?.messages.length ? active.messages.map((message) => <MessageBubble key={message.id} message={message} />) : <EmptyState onSuggestion={send} />}</section>
         <Composer onSend={send} onStop={stop} busy={busy} webSearch={settings.webSearch && !settings.localOnly} onToggleResearch={() => setSettings((current) => ({ ...current, webSearch: !current.webSearch }))} />
       </main>
+      <MobileControls />
       {settingsOpen && <SettingsModal settings={settings} onChange={setSettings} capabilities={caps} health={health} onClose={() => setSettingsOpen(false)} />}
       {historyOpen && <HistoryPanel conversations={conversations} activeId={activeId} onSelect={setActiveId} onNew={createChat} onDelete={deleteChat} onTogglePin={(id) => { const chat = conversations.find((item) => item.id === id); mutateChat(id, { pinned: !chat?.pinned }); }} onToggleArchive={(id) => { const chat = conversations.find((item) => item.id === id); mutateChat(id, { archived: !chat?.archived }); }} onClose={() => setHistoryOpen(false)} />}
     </div>
