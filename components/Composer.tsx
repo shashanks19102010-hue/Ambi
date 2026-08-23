@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 
-type RecognitionEvent = { results: { [index: number]: { [index: number]: { transcript: string } } } };
+type RecognitionEvent = {
+  results: { [index: number]: { [index: number]: { transcript: string } } };
+};
 type Recognition = {
   start: () => void;
   stop: () => void;
@@ -25,6 +27,8 @@ export default function Composer({
 }) {
   const [value, setValue] = useState("");
   const [listening, setListening] = useState(false);
+  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+  const [composing, setComposing] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<Recognition | null>(null);
 
@@ -39,23 +43,31 @@ export default function Composer({
 
   const send = () => {
     const text = value.trim();
-    if (!text || busy) return;
+    if (!text || composing) return;
     onSend(text);
     setValue("");
+    setSelectedFileName(null);
     requestAnimationFrame(autoSize);
+    requestAnimationFrame(() => inputRef.current?.focus());
   };
 
   const voice = () => {
-    const RecognitionConstructor = (window as Window & { SpeechRecognition?: new () => Recognition }).SpeechRecognition;
+    const RecognitionConstructor = (
+      window as Window & { SpeechRecognition?: new () => Recognition }
+    ).SpeechRecognition;
     if (!RecognitionConstructor) return;
     if (listening) {
       recognitionRef.current?.stop();
       return;
     }
+
     const recognition = new RecognitionConstructor();
     recognition.onresult = (event) => {
       const transcript = event.results[0]?.[0]?.transcript ?? "";
-      if (transcript) setValue((current) => `${current}${current ? " " : ""}${transcript}`);
+      if (transcript) {
+        setValue((current) => `${current}${current ? " " : ""}${transcript}`);
+        requestAnimationFrame(autoSize);
+      }
     };
     recognition.onend = () => {
       setListening(false);
@@ -66,6 +78,18 @@ export default function Composer({
     recognition.start();
   };
 
+  const attachFile = (file: File | undefined) => {
+    if (!file) return;
+    setSelectedFileName(file.name);
+    setValue((current) => {
+      const attachment = `[Attached file: ${file.name}]`;
+      return current.includes(attachment)
+        ? current
+        : `${current}${current ? "\n" : ""}${attachment}`;
+    });
+    requestAnimationFrame(() => inputRef.current?.focus());
+  };
+
   return (
     <div className="composer-wrap">
       <div
@@ -73,57 +97,100 @@ export default function Composer({
         onDragOver={(event) => event.preventDefault()}
         onDrop={(event) => {
           event.preventDefault();
-          const file = event.dataTransfer.files[0];
-          if (file) setValue((current) => `${current}${current ? "\n" : ""}[Attached: ${file.name}]`);
+          attachFile(event.dataTransfer.files[0]);
         }}
       >
+        {selectedFileName ? (
+          <div className="attachment-chip" role="status">
+            <span aria-hidden="true">📎</span>
+            <span>{selectedFileName}</span>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedFileName(null);
+                setValue((current) => current.replace(`\n[Attached file: ${selectedFileName}]`, "").replace(`[Attached file: ${selectedFileName}]`, "").trimStart());
+                requestAnimationFrame(autoSize);
+              }}
+              aria-label="Remove attachment"
+            >
+              ×
+            </button>
+          </div>
+        ) : null}
+
         <textarea
           ref={inputRef}
           value={value}
           onChange={(event) => {
             setValue(event.target.value);
-            autoSize();
+            requestAnimationFrame(autoSize);
           }}
+          onCompositionStart={() => setComposing(true)}
+          onCompositionEnd={() => setComposing(false)}
           onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
+            if (event.key === "Enter" && !event.shiftKey && !composing && !event.nativeEvent.isComposing) {
               event.preventDefault();
               send();
             }
           }}
+          onInput={autoSize}
           placeholder={busy ? "Type while Ambi is responding…" : "Message Ambi…"}
           aria-label="Message Ambi"
           aria-busy={busy}
           rows={1}
+          spellCheck
+          autoComplete="off"
+          autoCorrect="on"
+          enterKeyHint="send"
         />
+
         <div className="composer-row">
           <div className="composer-actions">
-            <button className={`tool-btn ${webSearch ? "active" : ""}`} onClick={onToggleResearch} type="button" aria-pressed={webSearch}>
+            <button
+              className={`tool-btn ${webSearch ? "active" : ""}`}
+              onClick={onToggleResearch}
+              type="button"
+              aria-pressed={webSearch}
+            >
               ⌁ Research
             </button>
+
             <label className="tool-btn">
               ＋ File
               <input
                 type="file"
                 hidden
                 onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) setValue((current) => `${current}${current ? "\n" : ""}[Attached: ${file.name}]`);
+                  attachFile(event.target.files?.[0]);
+                  event.currentTarget.value = "";
                 }}
               />
             </label>
-            <button className={`tool-btn ${listening ? "active" : ""}`} onClick={voice} type="button" aria-pressed={listening}>
+
+            <button
+              className={`tool-btn ${listening ? "active" : ""}`}
+              onClick={voice}
+              type="button"
+              aria-pressed={listening}
+            >
               {listening ? "◉ Listening" : "◉ Voice"}
             </button>
           </div>
+
           <span className="composer-hint">
-            {busy ? "Ambi is responding · you can keep typing" : webSearch ? "External research enabled" : "Local-first"} · Shift+Enter for a new line
+            {busy
+              ? "Ambi is responding · you can keep typing"
+              : webSearch
+                ? "External research enabled"
+                : "Secure hybrid AI"} · Shift+Enter for a new line
           </span>
+
           {busy ? (
             <button className="send stop" onClick={onStop} type="button" aria-label="Stop generating">
               Stop
             </button>
           ) : (
-            <button className="send" onClick={send} disabled={!value.trim()} type="button">
+            <button className="send" onClick={send} disabled={!value.trim()} type="button" aria-label="Send message">
               Send
             </button>
           )}
