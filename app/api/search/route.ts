@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   if (process.env.AMBI_WEB_SEARCH_ENABLED !== "1" || !process.env.TAVILY_API_KEY) {

@@ -9,7 +9,7 @@ import { buildContext } from "@/lib/memory/context";
 import { getLocalEngine, LocalInferenceError, type LocalEngine } from "@/lib/ai/engine";
 import { streamCloudChat, CloudInferenceError } from "@/lib/ai/cloud";
 import { detectCapabilities } from "@/lib/ai/capabilities";
-import { checkUserMessage } from "@/lib/security/safety";
+import { checkUserMessage, redactSecrets } from "@/lib/security/safety";
 import { runOptionalTool } from "@/lib/tools/router";
 import { wantsWebSearch } from "@/lib/tools/intents";
 import Sidebar from "@/components/Sidebar";
@@ -307,7 +307,7 @@ export default function AmbiShell() {
           onDelta: (delta) => {
             if (!isActiveRun()) return;
             combined += delta;
-            updateAssistant(chatId, responseId, { content: combined, source: "cloud", citations });
+            updateAssistant(chatId, responseId, { content: redactSecrets(combined), source: "cloud", citations });
           },
         });
         if (!isActiveRun()) throw abortedError();
@@ -332,7 +332,7 @@ export default function AmbiShell() {
             throw abortedError();
           }
           combined += delta;
-          updateAssistant(chatId, responseId, { content: combined, source: "local", citations });
+          updateAssistant(chatId, responseId, { content: redactSecrets(combined), source: "local", citations });
         }
         if (!isActiveRun()) throw abortedError();
       };
@@ -364,8 +364,9 @@ export default function AmbiShell() {
       }
 
       if (!isActiveRun()) throw abortedError();
+      const finalText = redactSecrets(combined.trim());
       updateAssistant(chatId, responseId, {
-        content: combined.trim() || (completedByCloud ? "The AI returned an empty response. Please retry." : "The local model returned an empty response. Please retry."),
+        content: finalText || (completedByCloud ? "The AI returned an empty response. Please retry." : "The local model returned an empty response. Please retry."),
         status: "complete",
       });
     } catch (error) {
@@ -399,6 +400,7 @@ export default function AmbiShell() {
         <header className="topbar">
           <div className="mobile-brand"><img src="/ambi-logo.png" alt="Ambi" /><strong>Ambi</strong></div>
           <div className="model-chip">{runtimeLabel}</div>
+          {caps?.tier && <div className="device-tier">{caps.tier}</div>}
           <div className="top-status"><span className={`state-dot ${health.network === "online" ? "online" : "offline"}`} />{health.network === "online" ? "Online" : "Offline"}<span className="sep">·</span>{health.safeMode ? "Recovery" : health.inference === "ready" ? runtimeLabel : modelProgress !== null ? `Loading ${Math.round(modelProgress * 100)}%` : caps?.webgpu ? "Local AI" : "Hybrid AI"}<button onClick={() => setSettingsOpen(true)} className="icon-btn" aria-label="Open settings">⚙</button></div>
         </header>
         {modelProgress !== null && <div className="model-progress"><div style={{ width: `${Math.round(modelProgress * 100)}%` }} /></div>}
