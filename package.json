@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@huggingface/transformers": "3.8.1",
     "@mlc-ai/web-llm": "0.2.84",
     "next": "16.3.0",
     "react": "19.2.0",

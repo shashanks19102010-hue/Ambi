@@ -48,12 +48,16 @@ const validConversations = (value: unknown): Conversation[] => {
     .slice(0, MAX_CONVERSATIONS);
 };
 
-const normalizeSettings = (value: unknown): AppSettings | null => {
+const normalizeSettings = (value: unknown, migrateLegacyDefault: boolean): AppSettings | null => {
   if (!value || typeof value !== "object") return null;
   const candidate = value as Partial<AppSettings>;
-  const model = typeof candidate.model === "string" && MODEL_CATALOG.some((item) => item.id === candidate.model)
-    ? candidate.model
-    : DEFAULT_MODEL_ID;
+  const requestedModel = typeof candidate.model === "string" ? candidate.model : "";
+  const isKnownModel = MODEL_CATALOG.some((item) => item.id === requestedModel);
+  const wasPreviousDefault = requestedModel === "Llama-3.2-1B-Instruct-q4f16_1-MLC";
+  const model = !isKnownModel || (migrateLegacyDefault && wasPreviousDefault)
+    ? DEFAULT_MODEL_ID
+    : requestedModel;
+
   return {
     model,
     webSearch: Boolean(candidate.webSearch),
@@ -84,7 +88,11 @@ export const memoryStore = {
     await write("activeConversationId", id);
   },
   async loadSettings() {
-    return normalizeSettings(await read<unknown>("settings"));
+    const current = await read<unknown>("settings");
+    const migrated = await read<boolean>("settings-model-migrated-v1");
+    const result = normalizeSettings(current, !migrated);
+    if (!migrated) await write("settings-model-migrated-v1", true);
+    return result;
   },
   async saveSettings(settings: AppSettings) {
     await write("settings", settings);
