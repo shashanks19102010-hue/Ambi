@@ -1,4 +1,4 @@
-import { DB_NAME, DB_VERSION, MAX_CONVERSATIONS, STORE_NAME } from "@/lib/constants";
+import { DB_NAME, DB_VERSION, DEFAULT_MODEL_ID, MAX_CONVERSATIONS, MODEL_CATALOG, STORE_NAME } from "@/lib/constants";
 import type { AppSettings, Conversation, MemoryItem } from "@/types/chat";
 
 type RecordValue = { key: string; value: unknown };
@@ -15,12 +15,14 @@ function openDb(): Promise<IDBDatabase> {
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error ?? new Error("IndexedDB open failed."));
+  }).catch((error) => {
+    dbPromise = null;
+    throw error;
   });
-  dbPromise = dbPromise.catch((error) => { dbPromise = null; throw error; });
   return dbPromise;
 }
 
-async function write<T>(key: string, value: T) {
+async function write<T>(key: string, value: T): Promise<void> {
   const db = await openDb();
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, "readwrite");
@@ -41,19 +43,67 @@ async function read<T>(key: string): Promise<T | null> {
 
 const validConversations = (value: unknown): Conversation[] => {
   if (!Array.isArray(value)) return [];
-  return value.filter((item): item is Conversation => Boolean(item && typeof item.id === "string" && Array.isArray(item.messages))).slice(0, MAX_CONVERSATIONS);
+  return value
+    .filter((item): item is Conversation => Boolean(item && typeof item.id === "string" && Array.isArray(item.messages)))
+    .slice(0, MAX_CONVERSATIONS);
+};
+
+const normalizeSettings = (value: unknown): AppSettings | null => {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Partial<AppSettings>;
+  const model = typeof candidate.model === "string" && MODEL_CATALOG.some((item) => item.id === candidate.model)
+    ? candidate.model
+    : DEFAULT_MODEL_ID;
+  return {
+    model,
+    webSearch: Boolean(candidate.webSearch),
+    safetyMode: candidate.safetyMode === "balanced" ? "balanced" : "strict",
+    memoryEnabled: candidate.memoryEnabled !== false,
+    autoRecover: candidate.autoRecover !== false,
+    localOnly: Boolean(candidate.localOnly),
+    responseStyle: candidate.responseStyle === "concise" || candidate.responseStyle === "detailed" || candidate.responseStyle === "expert" ? candidate.responseStyle : "normal",
+    language: candidate.language === "en" || candidate.language === "hi" || candidate.language === "hinglish" ? candidate.language : "auto",
+    theme: candidate.theme === "dark" || candidate.theme === "light" || candidate.theme === "oled" ? candidate.theme : "system",
+    reducedMotion: Boolean(candidate.reducedMotion),
+    temporaryChat: Boolean(candidate.temporaryChat),
+    developerMode: Boolean(candidate.developerMode),
+  };
 };
 
 export const memoryStore = {
-  async loadConversations() { return validConversations(await read<unknown>("conversations")); },
-  async saveConversations(items: Conversation[]) { await write("conversations", items.slice(0, MAX_CONVERSATIONS)); },
-  async loadSettings() { return read<AppSettings>("settings"); },
-  async saveSettings(settings: AppSettings) { await write("settings", settings); },
-  async loadMemories() { return (await read<MemoryItem[]>("memories")) ?? []; },
-  async saveMemories(items: MemoryItem[]) { await write("memories", items); },
-  async saveSnapshot(conversations: Conversation[], settings: AppSettings) { await write("snapshot", { conversations, settings, createdAt: Date.now() }); },
-  async loadSnapshot() { return read<{ conversations: Conversation[]; settings: AppSettings; createdAt: number }>("snapshot"); },
-  async clearTemporary() { await write("memories", (await read<MemoryItem[]>("memories") ?? []).filter((m) => !m.expiresAt || m.expiresAt > Date.now())); },
+  async loadConversations() {
+    return validConversations(await read<unknown>("conversations"));
+  },
+  async saveConversations(items: Conversation[]) {
+    await write("conversations", items.slice(0, MAX_CONVERSATIONS));
+  },
+  async loadActiveConversationId() {
+    return read<string>("activeConversationId");
+  },
+  async saveActiveConversationId(id: string | null) {
+    await write("activeConversationId", id);
+  },
+  async loadSettings() {
+    return normalizeSettings(await read<unknown>("settings"));
+  },
+  async saveSettings(settings: AppSettings) {
+    await write("settings", settings);
+  },
+  async loadMemories() {
+    return (await read<MemoryItem[]>("memories")) ?? [];
+  },
+  async saveMemories(items: MemoryItem[]) {
+    await write("memories", items);
+  },
+  async saveSnapshot(conversations: Conversation[], settings: AppSettings) {
+    await write("snapshot", { conversations, settings, createdAt: Date.now() });
+  },
+  async loadSnapshot() {
+    return read<{ conversations: Conversation[]; settings: AppSettings; createdAt: number }>("snapshot");
+  },
+  async clearTemporary() {
+    await write("memories", (await read<MemoryItem[]>("memories") ?? []).filter((item) => !item.expiresAt || item.expiresAt > Date.now()));
+  },
   async clearAll() {
     const db = await openDb();
     await new Promise<void>((resolve, reject) => {
