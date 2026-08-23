@@ -1,5 +1,5 @@
 import type { CapabilityState } from "@/types/chat";
-import { MODEL_CATALOG } from "@/lib/constants";
+import { MODEL_CATALOG, WASM_FALLBACK_MODEL_ID } from "@/lib/constants";
 
 export function detectCapabilities(): CapabilityState {
   const nav = typeof navigator !== "undefined" ? navigator : undefined;
@@ -19,9 +19,9 @@ export function detectCapabilities(): CapabilityState {
 }
 
 export function recommendedModel(capabilities: CapabilityState): string {
-  const candidates = MODEL_CATALOG;
-  if (capabilities.tier === "High Performance") return candidates[2]?.id ?? candidates[0].id;
-  if (capabilities.tier === "Powerful") return candidates[2]?.id ?? candidates[0].id;
-  if (capabilities.tier === "Standard") return candidates[1]?.id ?? candidates[0].id;
-  return candidates[0].id;
+  if (!capabilities.webgpu || capabilities.tier === "Basic") return WASM_FALLBACK_MODEL_ID;
+  if (capabilities.tier === "High Performance" || capabilities.tier === "Powerful") {
+    return MODEL_CATALOG.find((model) => model.tier === "Powerful")?.id ?? WASM_FALLBACK_MODEL_ID;
+  }
+  return MODEL_CATALOG.find((model) => model.runtime === "webgpu")?.id ?? WASM_FALLBACK_MODEL_ID;
 }
