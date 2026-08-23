@@ -1,4 +1,4 @@
-import { streamText, type CoreMessage } from "ai";
+import { streamText, type ModelMessage } from "ai";
 import { SYSTEM_PROMPT } from "@/lib/constants";
 
 export const runtime = "nodejs";
@@ -7,7 +7,7 @@ export const maxDuration = 30;
 const MAX_MESSAGES = 40;
 const MAX_MESSAGE_CHARS = 12000;
 
-function normalizeMessages(input: unknown): CoreMessage[] {
+function normalizeMessages(input: unknown): ModelMessage[] {
   if (!Array.isArray(input)) return [];
 
   return input
@@ -58,9 +58,6 @@ export async function POST(request: Request) {
       ? " Configure Vercel AI Gateway for this project or set AI_GATEWAY_API_KEY for local development."
       : "";
 
-    return Response.json(
-      { error: `${message}${authHint}` },
-      { status: 503 },
-    );
+    return Response.json({ error: `${message}${authHint}` }, { status: 503 });
   }
 }
