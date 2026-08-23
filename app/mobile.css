@@ -1,10 +1,13 @@
 @media (max-width: 900px) {
   .main { min-height: 100svh; }
   .topbar { height: 58px; padding: env(safe-area-inset-top) 12px 0; min-height: calc(58px + env(safe-area-inset-top)); }
-  .mobile-brand { display: flex; min-width: 0; }
+  .mobile-brand { display: flex; min-width: 0; padding-left: 78px; }
   .mobile-brand strong { font-size: 15px; }
   .model-chip { max-width: 150px; font-size: 10px; }
   .top-status { gap: 5px; }
+  .mobile-controls { display: flex; position: fixed; top: calc(env(safe-area-inset-top) + 10px); left: 9px; z-index: 8; gap: 5px; }
+  .mobile-controls button { width: 34px; height: 34px; border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 10px; box-shadow: var(--shadow-soft); font-size: 16px; }
+  .mobile-controls button:active { transform: scale(.96); }
   .messages { width: 100%; padding: 20px 12px 145px; }
   .message { margin: 22px 0; grid-template-columns: 30px minmax(0,1fr); gap: 9px; }
   .avatar { width: 29px; height: 29px; border-radius: 9px; }
@@ -23,6 +26,10 @@
   .empty h1 { font-size: 30px; }
   .suggestions { grid-template-columns: 1fr 1fr; gap: 8px; }
   .suggestions button { padding: 12px; border-radius: 13px; }
+}
+
+@media (min-width: 901px) {
+  .mobile-controls { display: none; }
 }
 
 @media (max-width: 560px) {
