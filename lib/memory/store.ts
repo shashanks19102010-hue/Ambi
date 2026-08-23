@@ -48,16 +48,18 @@ const validConversations = (value: unknown): Conversation[] => {
     .slice(0, MAX_CONVERSATIONS);
 };
 
-const normalizeSettings = (value: unknown, shouldMigrateLegacyDefault: boolean): AppSettings | null => {
+const normalizeSettings = (value: unknown, migrateLegacyDefault: boolean): AppSettings | null => {
   if (!value || typeof value !== "object") return null;
   const candidate = value as Partial<AppSettings>;
   const requestedModel = typeof candidate.model === "string" ? candidate.model : "";
-  const legacyDefault = requestedModel === "Llama-3.2-1B-Instruct-q4f16_1-MLC";
-  const model = shouldMigrateLegacyDefault || !MODEL_CATALOG.some((item) => item.id === requestedModel)
+  const isKnownModel = MODEL_CATALOG.some((item) => item.id === requestedModel);
+  const wasPreviousDefault = requestedModel === "Llama-3.2-1B-Instruct-q4f16_1-MLC";
+  const model = !isKnownModel || (migrateLegacyDefault && wasPreviousDefault)
     ? DEFAULT_MODEL_ID
     : requestedModel;
+
   return {
-    model: legacyDefault && shouldMigrateLegacyDefault ? DEFAULT_MODEL_ID : model,
+    model,
     webSearch: Boolean(candidate.webSearch),
     safetyMode: candidate.safetyMode === "balanced" ? "balanced" : "strict",
     memoryEnabled: candidate.memoryEnabled !== false,
