@@ -268,6 +268,8 @@ export default function AmbiShell() {
         } catch (cloudError) {
           if (stopRef.current) throw cloudError;
           setHealth((currentHealth) => ({ ...currentHealth, recovery: "recovering" }));
+          combined = "";
+          updateAssistant(chatId, responseId, { content: "", status: "streaming", source: "local", citations });
           await runLocal();
         }
       } else {
@@ -278,7 +280,7 @@ export default function AmbiShell() {
           if (!settings.localOnly && networkAvailable) {
             setHealth((currentHealth) => ({ ...currentHealth, recovery: "recovering" }));
             combined = "";
-            updateAssistant(chatId, responseId, { content: "", status: "streaming", source: "cloud" });
+            updateAssistant(chatId, responseId, { content: "", status: "streaming", source: "cloud", citations });
             await runCloud();
           } else {
             throw localError;
