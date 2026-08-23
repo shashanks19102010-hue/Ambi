@@ -1,6 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-export function proxy(_request: NextRequest) {
+export function proxy(
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Next.js requires this parameter
+  _request: NextRequest,
+) {
   const response = NextResponse.next();
 
   response.headers.set("X-Frame-Options", "DENY");
