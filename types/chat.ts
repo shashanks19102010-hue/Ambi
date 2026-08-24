@@ -7,6 +7,17 @@ export interface Citation {
   snippet?: string;
 }
 
+export interface ImageAttachment {
+  type: "image";
+  dataUrl: string;
+  alt: string;
+}
+
+export interface ImageGenerationState {
+  type: "image";
+  phase: "preparing" | "creating" | "finishing";
+}
+
 export interface Message {
   id: string;
   role: Role;
@@ -16,6 +27,8 @@ export interface Message {
   branchId?: string;
   source?: "local" | "web" | "tool" | "cloud";
   citations?: Citation[];
+  media?: ImageAttachment;
+  generation?: ImageGenerationState;
 }
 
 export interface Conversation {
