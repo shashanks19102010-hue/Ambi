@@ -1,10 +1,21 @@
 "use client";
+import { useEffect, useState } from "react";
 import type { AppSettings, CapabilityState, HealthState } from "@/types/chat";
 import { CLOUD_MODEL_CATALOG } from "@/lib/constants";
 
 export default function SettingsModal({ settings, onChange, capabilities, health, onClose, onRefreshHealth }: { settings: AppSettings; onChange: (value: AppSettings) => void; capabilities: CapabilityState | null; health: HealthState; onClose: () => void; onRefreshHealth: () => Promise<void> }) {
+  const [imageReady, setImageReady] = useState<boolean | null>(null);
+  const [imageModel, setImageModel] = useState("gpt-image-2");
   const set = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => onChange({ ...settings, [key]: value });
   const model = CLOUD_MODEL_CATALOG.find((m) => m.id === settings.model) ?? CLOUD_MODEL_CATALOG[0];
+
+  useEffect(() => {
+    void fetch("/api/health/image", { cache: "no-store" }).then(async (response) => {
+      const data = await response.json().catch(() => ({})) as { configured?: boolean; model?: string };
+      setImageReady(Boolean(response.ok && data.configured));
+      if (data.model) setImageModel(data.model);
+    }).catch(() => setImageReady(false));
+  }, []);
 
   return <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}><section className="modal settings-modal" role="dialog" aria-modal="true" aria-label="Ambi settings">
     <div className="modal-header"><div><div className="eyebrow">AMBI CONTROL CENTER</div><h2>Settings</h2></div><button className="close" onClick={onClose} aria-label="Close settings" type="button">×</button></div>
@@ -16,9 +27,10 @@ export default function SettingsModal({ settings, onChange, capabilities, health
     </div>
     <div className="row"><div><strong>Groq AI connection</strong><p>{model.description} Your API key stays server-side.</p></div><button className="secondary status-action" onClick={() => void onRefreshHealth()} type="button">{health.inference === "ready" ? "Connected" : "Test connection"}</button></div>
     <div className="row"><div><strong>Web research</strong><p>Current web sources are enabled when the Research button is active.</p></div><input className="toggle" type="checkbox" checked={settings.webSearch} onChange={(e) => set("webSearch", e.target.checked)} aria-label="Enable web research" /></div>
+    <div className="row"><div><strong>Image generation</strong><p>{imageReady ? `${imageModel} is configured. Create images from the composer.` : "Optional: add OPENAI_API_KEY in Vercel to enable image generation."}</p></div><span className={`connection-pill ${imageReady ? "ready" : "disabled"}`}>{imageReady === null ? "Checking…" : imageReady ? "Ready" : "Not configured"}</span></div>
     <div className="row"><div><strong>Memory</strong><p>Approved memories are stored locally and can be managed from Memory Center.</p></div><button className="secondary" onClick={() => window.dispatchEvent(new Event("ambi:open-memory"))} type="button">Open Memory</button></div>
     <div className="row"><div><strong>Temporary chat</strong><p>Do not persist this conversation normally.</p></div><input className="toggle" type="checkbox" checked={settings.temporaryChat} onChange={(e) => set("temporaryChat", e.target.checked)} aria-label="Temporary chat" /></div>
-    <div className="diagnostics"><strong>Diagnostics</strong><div className="diag-grid"><div><span>Provider</span><b>Groq</b></div><div><span>Model</span><b>{model.name}</b></div><div><span>AI status</span><b>{health.inference}</b></div><div><span>Network</span><b>{health.network}</b></div><div><span>Research</span><b>{health.webSearch}</b></div><div><span>Device</span><b>{capabilities?.tier ?? "Detecting"}</b></div></div></div>
-    <div className="modal-header settings-footer"><span className="settings-note">Ambi uses Groq Cloud AI for chat.</span><button className="primary" onClick={onClose} type="button">Done</button></div>
+    <div className="diagnostics"><strong>Diagnostics</strong><div className="diag-grid"><div><span>Provider</span><b>Groq</b></div><div><span>Model</span><b>{model.name}</b></div><div><span>AI status</span><b>{health.inference}</b></div><div><span>Network</span><b>{health.network}</b></div><div><span>Research</span><b>{health.webSearch}</b></div><div><span>Images</span><b>{imageReady ? "ready" : "disabled"}</b></div><div><span>Device</span><b>{capabilities?.tier ?? "Detecting"}</b></div></div></div>
+    <div className="modal-header settings-footer"><span className="settings-note">Ambi uses Groq Cloud AI for chat. Image generation is a separate optional provider.</span><button className="primary" onClick={onClose} type="button">Done</button></div>
   </section></div>;
 }
