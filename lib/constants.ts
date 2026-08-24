@@ -54,15 +54,6 @@ export const CLOUD_MODEL_CATALOG = [
     tier: "Powerful",
     toolUse: true,
   },
-  {
-    id: "groq/compound",
-    name: "Groq Compound",
-    description: "Agentic system with built-in tools for web search and code execution.",
-    contextWindow: 131072,
-    maxOutputTokens: 8192,
-    tier: "Agentic",
-    toolUse: true,
-  },
 ] as const;
 
 export const MODEL_CATALOG = [
