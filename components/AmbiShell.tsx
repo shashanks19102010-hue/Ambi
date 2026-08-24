@@ -127,8 +127,9 @@ export default function AmbiShell() {
     }
 
     if (typeof navigator !== "undefined" && !navigator.onLine) {
+      const offlineUserMessage: Message = { id: uid("msg"), role: "user", content: cleanText, createdAt: Date.now(), status: "complete", source: "local" };
       const offlineMessage: Message = { id: uid("msg"), role: "assistant", content: "Ambi Cloud AI needs an internet connection. Connect to the internet and try again.", createdAt: Date.now(), status: "complete", source: "local" };
-      const next = { ...current, title: current.messages.length === 0 ? titleFor(cleanText) : current.title, messages: [...current.messages, { id: uid("msg"), role: "user", content: cleanText, createdAt: Date.now(), status: "complete" }, offlineMessage], updatedAt: Date.now() };
+      const next: Conversation = { ...current, title: current.messages.length === 0 ? titleFor(cleanText) : current.title, messages: [...current.messages, offlineUserMessage, offlineMessage], updatedAt: Date.now() };
       setConversations((previous) => previous.some((chat) => chat.id === chatId) ? previous.map((chat) => chat.id === chatId ? next : chat) : [next, ...previous]);
       setActiveId(chatId);
       generationRef.current = null;
