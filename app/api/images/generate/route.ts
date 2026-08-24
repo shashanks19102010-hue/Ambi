@@ -2,16 +2,39 @@ import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+export const maxDuration = 60;
 
-const OPENROUTER = "https://openrouter.ai/api/v1/images";
+const PIXAZO = "https://gateway.pixazo.ai/flux/text-to-image";
+const STATUS = "https://gateway.pixazo.ai/v2/requests/status";
 const MAX_PROMPT = 4000;
 
-export async function POST(request: Request) {
-  const apiKey = process.env.OPENROUTER_API_KEY?.trim();
-  if (!apiKey) return NextResponse.json({ error: "Image generation is not configured. Add OPENROUTER_API_KEY in Vercel." }, { status: 503 });
+async function poll(requestId: string, apiKey: string, signal: AbortSignal) {
+  for (let attempt = 0; attempt < 18; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const response = await fetch(`${STATUS}/${encodeURIComponent(requestId)}`, {
+      headers: { "Ocp-Apim-Subscription-Key": apiKey, Accept: "application/json" },
+      cache: "no-store",
+      signal,
+    });
+    const payload = await response.json().catch(() => ({})) as {
+      status?: string;
+      error?: string | { message?: string };
+      output?: { media_url?: string[]; media_type?: string };
+    };
+    if (!response.ok) throw new Error(typeof payload.error === "string" ? payload.error : payload.error?.message || `Pixazo status failed (${response.status}).`);
+    const state = (payload.status || "").toUpperCase();
+    const url = payload.output?.media_url?.[0];
+    if (state === "COMPLETED" && url) return { url, mediaType: payload.output?.media_type || "image/png" };
+    if (["FAILED", "ERROR", "CANCELLED"].includes(state)) throw new Error(typeof payload.error === "string" ? payload.error : payload.error?.message || `Pixazo image generation ${state.toLowerCase()}.`);
+  }
+  throw new Error("Pixazo image generation timed out. Please try again.");
+}
 
-  let body: { prompt?: string; model?: string; aspectRatio?: string; resolution?: string };
+export async function POST(request: Request) {
+  const apiKey = process.env.PIXAZO_API_KEY?.trim();
+  if (!apiKey) return NextResponse.json({ error: "Image generation is not configured. Add PIXAZO_API_KEY in Vercel." }, { status: 503 });
+
+  let body: { prompt?: string };
   try { body = await request.json() as typeof body; }
   catch { return NextResponse.json({ error: "Invalid image generation request." }, { status: 400 }); }
 
@@ -19,44 +42,32 @@ export async function POST(request: Request) {
   if (!prompt) return NextResponse.json({ error: "Describe the image you want to create." }, { status: 400 });
   if (prompt.length > MAX_PROMPT) return NextResponse.json({ error: `Image prompt is too long. Keep it under ${MAX_PROMPT} characters.` }, { status: 400 });
 
-  const model = typeof body.model === "string" && body.model.length > 0 ? body.model : (process.env.OPENROUTER_IMAGE_MODEL || "recraft/recraft-v4.1-pro:free");
-
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 55000);
+  request.signal.addEventListener("abort", () => controller.abort(), { once: true });
   try {
-    const response = await fetch(OPENROUTER, {
+    const response = await fetch(PIXAZO, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://ambi-ai.vercel.app",
-        "X-Title": "Ambi AI",
-      },
+      headers: { "Content-Type": "application/json", "Ocp-Apim-Subscription-Key": apiKey },
+      body: JSON.stringify({ prompt }),
       cache: "no-store",
-      signal: AbortSignal.timeout(110000),
-      body: JSON.stringify({
-        model,
-        prompt,
-        n: 1,
-        aspect_ratio: body.aspectRatio || "1:1",
-        resolution: body.resolution || "2K",
-      }),
+      signal: controller.signal,
     });
-
     const payload = await response.json().catch(() => ({})) as {
-      data?: Array<{ b64_json?: string; mime_type?: string; url?: string }>;
-      error?: { message?: string } | string;
+      request_id?: string;
+      status?: string;
+      output?: { media_url?: string[]; media_type?: string };
+      error?: string | { message?: string };
     };
-    if (!response.ok) {
-      const detail = typeof payload.error === "string" ? payload.error : payload.error?.message;
-      return NextResponse.json({ error: detail || `Image generation failed (${response.status}).` }, { status: response.status });
-    }
-
-    const item = payload.data?.[0];
-    if (!item) return NextResponse.json({ error: "The image provider returned no image data." }, { status: 502 });
-    const mime = item.mime_type || "image/png";
-    if (item.b64_json) return NextResponse.json({ ok: true, provider: "openrouter", model, dataUrl: `data:${mime};base64,${item.b64_json}` }, { headers: { "Cache-Control": "no-store" } });
-    if (item.url) return NextResponse.json({ ok: true, provider: "openrouter", model, dataUrl: item.url }, { headers: { "Cache-Control": "no-store" } });
-    return NextResponse.json({ error: "The image provider returned an unsupported image format." }, { status: 502 });
+    if (!response.ok) return NextResponse.json({ error: typeof payload.error === "string" ? payload.error : payload.error?.message || `Pixazo image generation failed (${response.status}).` }, { status: response.status });
+    if (payload.output?.media_url?.[0]) return NextResponse.json({ ok: true, provider: "pixazo", model: "flux", url: payload.output.media_url[0], mediaType: payload.output.media_type || "image/png" });
+    if (!payload.request_id) return NextResponse.json({ error: "Pixazo returned no image job." }, { status: 502 });
+    const result = await poll(payload.request_id, apiKey, controller.signal);
+    return NextResponse.json({ ok: true, provider: "pixazo", model: "flux", url: result.url, mediaType: result.mediaType }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Image generation request failed." }, { status: 504 });
+    if (controller.signal.aborted) return NextResponse.json({ error: "Image generation timed out or was cancelled." }, { status: 504 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Image generation request failed." }, { status: 502 });
+  } finally {
+    clearTimeout(timeout);
   }
 }
