@@ -8,7 +8,7 @@ type SpeechRecognitionLike = {
   start: () => void;
   stop: () => void;
   onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
-  onend: (() => void) => void;
+  onend: (() => void) | null;
   onerror: ((event: { error?: string }) => void) | null;
 };
 
