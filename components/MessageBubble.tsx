@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from "react";
 import type { Message } from "@/types/chat";
 
@@ -18,7 +20,7 @@ function renderMath(source: string) {
   value = value.replace(/([A-Za-z0-9)]+)\^\{([^{}]+)\}/g, "$1<sup>$2</sup>");
   value = value.replace(/([A-Za-z0-9)]+)\^([A-Za-z0-9]+)/g, "$1<sup>$2</sup>");
   value = value.replace(/[{}]/g, "");
-  return `<span class="math-block">${value}</span>`;
+  return `<span class=\"math-block\">${value}</span>`;
 }
 
 function renderRichText(source: string) {
@@ -27,7 +29,7 @@ function renderRichText(source: string) {
   return parts.map((part) => {
     if (part.startsWith("\\[") && part.endsWith("\\]")) return renderMath(part.slice(2, -2));
     if (part.startsWith("$$") && part.endsWith("$$")) return renderMath(part.slice(2, -2));
-    if (part.startsWith("\\(") && part.endsWith("\\)")) return `<span class="math-inline">${renderMath(part.slice(2, -2))}</span>`;
+    if (part.startsWith("\\(") && part.endsWith("\\)")) return `<span class=\"math-inline\">${renderMath(part.slice(2, -2))}</span>`;
     let html = part.replace(/`([^`]+)`/g, "<code class=\"inline-code\">$1</code>");
     html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
     html = html.replace(/__([^_]+)__/g, "<strong>$1</strong>");
