@@ -12,7 +12,7 @@ function processEvent(event: Event, onDelta: (text: string) => void) {
   return event.type === "done";
 }
 
-export async function streamCloudChat({ messages, model, signal, onDelta }: { messages: Message[]; model: string; signal?: AbortSignal; onDelta: (text: string) => void }) {
+export async function streamCloudChat({ messages, model, signal, onDelta, imageDataUrl }: { messages: Message[]; model: string; signal?: AbortSignal; onDelta: (text: string) => void; imageDataUrl?: string }) {
   if (signal?.aborted) throw new CloudInferenceError("Generation stopped.", "ABORTED");
 
   let response: Response;
@@ -21,7 +21,7 @@ export async function streamCloudChat({ messages, model, signal, onDelta }: { me
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
       cache: "no-store",
-      body: JSON.stringify({ model, messages }),
+      body: JSON.stringify({ model, messages, imageDataUrl }),
       signal,
     });
   } catch (error) {
@@ -52,7 +52,6 @@ export async function streamCloudChat({ messages, model, signal, onDelta }: { me
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split("\n");
       buffer = lines.pop() ?? "";
-
       for (const line of lines) {
         const trimmed = line.trim();
         if (!trimmed.startsWith("data:")) continue;
