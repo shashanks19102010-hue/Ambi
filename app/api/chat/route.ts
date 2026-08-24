@@ -12,9 +12,10 @@ function groqApiKey() {
   return process.env.GROQ_API_KEY?.trim() || process.env.AI_GATEWAY_API_KEY?.trim() || "";
 }
 
-function selectedModel() {
-  const requested = process.env.AMBI_CLOUD_MODEL?.trim() || DEFAULT_CLOUD_MODEL_ID;
-  return CLOUD_MODEL_CATALOG.some((model) => model.id === requested) ? requested : DEFAULT_CLOUD_MODEL_ID;
+function validModel(requested: unknown) {
+  if (typeof requested === "string" && CLOUD_MODEL_CATALOG.some((model) => model.id === requested)) return requested;
+  const configured = process.env.AMBI_CLOUD_MODEL?.trim();
+  return configured && CLOUD_MODEL_CATALOG.some((model) => model.id === configured) ? configured : DEFAULT_CLOUD_MODEL_ID;
 }
 
 function normalizeMessages(input: unknown) {
@@ -44,7 +45,7 @@ export async function GET() {
   return Response.json({
     ok: true,
     provider: "groq",
-    model: selectedModel(),
+    model: validModel(undefined),
     apiKeyConfigured: Boolean(groqApiKey()),
     models: CLOUD_MODEL_CATALOG,
   });
@@ -55,8 +56,9 @@ export async function POST(request: Request) {
   if (!key) return Response.json({ error: "Groq API key is not configured on this deployment." }, { status: 503 });
 
   try {
-    const body = (await request.json()) as { messages?: unknown };
+    const body = (await request.json()) as { messages?: unknown; model?: unknown };
     const messages = normalizeMessages(body.messages);
+    const model = validModel(body.model);
     if (!messages.length) return Response.json({ error: "No messages were provided." }, { status: 400 });
 
     const controller = new AbortController();
@@ -74,7 +76,7 @@ export async function POST(request: Request) {
       cache: "no-store",
       signal: controller.signal,
       body: JSON.stringify({
-        model: selectedModel(),
+        model,
         messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
         temperature: 0.4,
         max_tokens: MAX_OUTPUT_TOKENS,
@@ -153,7 +155,7 @@ export async function POST(request: Request) {
         "Cache-Control": "no-store, no-cache, must-revalidate",
         "X-Content-Type-Options": "nosniff",
         "X-Ambi-Provider": "groq",
-        "X-Ambi-Model": selectedModel(),
+        "X-Ambi-Model": model,
       },
     });
   } catch (error) {
