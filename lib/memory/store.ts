@@ -1,4 +1,4 @@
-import { DB_NAME, DB_VERSION, DEFAULT_MODEL_ID, MAX_CONVERSATIONS, MODEL_CATALOG, STORE_NAME } from "@/lib/constants";
+import { DB_NAME, DB_VERSION, DEFAULT_CLOUD_MODEL_ID, DEFAULT_MODEL_ID, MAX_CONVERSATIONS, CLOUD_MODEL_CATALOG, MODEL_CATALOG, STORE_NAME } from "@/lib/constants";
 import type { AppSettings, Conversation, MemoryItem } from "@/types/chat";
 
 type RecordValue = { key: string; value: unknown };
@@ -48,15 +48,16 @@ const validConversations = (value: unknown): Conversation[] => {
     .slice(0, MAX_CONVERSATIONS);
 };
 
-const normalizeSettings = (value: unknown, migrateLegacyDefault: boolean): AppSettings | null => {
+const knownCloudModel = (id: string) => CLOUD_MODEL_CATALOG.some((item) => item.id === id);
+const knownLocalModel = (id: string) => MODEL_CATALOG.some((item) => item.id === id);
+
+const normalizeSettings = (value: unknown): AppSettings | null => {
   if (!value || typeof value !== "object") return null;
   const candidate = value as Partial<AppSettings>;
   const requestedModel = typeof candidate.model === "string" ? candidate.model : "";
-  const isKnownModel = MODEL_CATALOG.some((item) => item.id === requestedModel);
-  const wasPreviousDefault = requestedModel === "Llama-3.2-1B-Instruct-q4f16_1-MLC";
-  const model = !isKnownModel || (migrateLegacyDefault && wasPreviousDefault)
-    ? DEFAULT_MODEL_ID
-    : requestedModel;
+  const model = knownCloudModel(requestedModel)
+    ? requestedModel
+    : DEFAULT_CLOUD_MODEL_ID;
 
   return {
     model,
@@ -89,10 +90,7 @@ export const memoryStore = {
   },
   async loadSettings() {
     const current = await read<unknown>("settings");
-    const migrated = await read<boolean>("settings-model-migrated-v1");
-    const result = normalizeSettings(current, !migrated);
-    if (!migrated) await write("settings-model-migrated-v1", true);
-    return result;
+    return normalizeSettings(current);
   },
   async saveSettings(settings: AppSettings) {
     await write("settings", settings);
@@ -122,3 +120,6 @@ export const memoryStore = {
     });
   },
 };
+
+void DEFAULT_MODEL_ID;
+void knownLocalModel;
