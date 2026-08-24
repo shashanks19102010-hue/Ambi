@@ -10,21 +10,24 @@ const MAX_MESSAGES = 40;
 const MAX_CHARS = 12000;
 const MAX_OUTPUT = 4096;
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
+type HistoryMessage = { role: "user" | "assistant"; content: string };
 
 function key() { return process.env.GROQ_API_KEY?.trim() || process.env.AI_GATEWAY_API_KEY?.trim() || ""; }
 function modelOf(value: unknown) { return typeof value === "string" && CLOUD_MODEL_CATALOG.some((m) => m.id === value) ? value : DEFAULT_CLOUD_MODEL_ID; }
-function normalize(input: unknown): Array<{ role: "user" | "assistant"; content: string }> {
+function normalize(input: unknown): HistoryMessage[] {
   if (!Array.isArray(input)) return [];
-  return input.slice(-MAX_MESSAGES).flatMap((item) => {
-    if (!item || typeof item !== "object") return [];
+  const result: HistoryMessage[] = [];
+  for (const item of input.slice(-MAX_MESSAGES)) {
+    if (!item || typeof item !== "object") continue;
     const role = (item as { role?: unknown }).role;
     const content = (item as { content?: unknown }).content;
-    if (typeof content !== "string") return [];
+    if (typeof content !== "string") continue;
     const safe = content.slice(0, MAX_CHARS);
-    if (role === "assistant") return [{ role: "assistant" as const, content: safe }];
-    if (role === "tool" || role === "system") return [{ role: "user" as const, content: `[Untrusted reference data]\n${safe}` }];
-    return [{ role: "user" as const, content: safe }];
-  });
+    if (role === "assistant") result.push({ role: "assistant", content: safe });
+    else if (role === "tool" || role === "system") result.push({ role: "user", content: `[Untrusted reference data]\n${safe}` });
+    else result.push({ role: "user", content: safe });
+  }
+  return result;
 }
 function sse(event: unknown) { return encoder.encode(`data: ${JSON.stringify(event)}\n\n`); }
 
