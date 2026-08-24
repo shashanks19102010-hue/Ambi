@@ -8,25 +8,33 @@ type SpeechRecognitionLike = {
   start: () => void;
   stop: () => void;
   onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
-  onend: (() => void) | null;
+  onend: (() => void) => void;
   onerror: ((event: { error?: string }) => void) | null;
 };
 
 type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
-
-type SpeechWindow = Window & {
-  SpeechRecognition?: SpeechRecognitionCtor;
-  webkitSpeechRecognition?: SpeechRecognitionCtor;
-};
+type SpeechWindow = Window & { SpeechRecognition?: SpeechRecognitionCtor; webkitSpeechRecognition?: SpeechRecognitionCtor };
 
 export default function Composer({ onSend, onStop, busy, webSearch, onToggleResearch }: { onSend: (text: string) => void; onStop: () => void; busy: boolean; webSearch: boolean; onToggleResearch: () => void }) {
   const [value, setValue] = useState("");
   const [listening, setListening] = useState(false);
   const [voiceError, setVoiceError] = useState("");
+  const [imageMode, setImageMode] = useState(false);
+  const [imageBusy, setImageBusy] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
-  useEffect(() => () => recognitionRef.current?.stop(), []);
+  useEffect(() => {
+    const onImageStart = () => setImageBusy(true);
+    const onImageEnd = () => setImageBusy(false);
+    window.addEventListener("ambi:image-start", onImageStart);
+    window.addEventListener("ambi:image-end", onImageEnd);
+    return () => {
+      recognitionRef.current?.stop();
+      window.removeEventListener("ambi:image-start", onImageStart);
+      window.removeEventListener("ambi:image-end", onImageEnd);
+    };
+  }, []);
 
   function resize() {
     const el = inputRef.current;
@@ -37,8 +45,12 @@ export default function Composer({ onSend, onStop, busy, webSearch, onToggleRese
 
   function send() {
     const text = value.trim();
-    if (!text || busy) return;
-    onSend(text);
+    if (!text || busy || imageBusy) return;
+    if (imageMode) {
+      window.dispatchEvent(new CustomEvent("ambi:generate-image", { detail: { prompt: text } }));
+    } else {
+      onSend(text);
+    }
     setValue("");
     requestAnimationFrame(resize);
   }
@@ -74,7 +86,6 @@ export default function Composer({ onSend, onStop, busy, webSearch, onToggleRese
       setListening(false);
       recognitionRef.current = null;
     };
-
     recognitionRef.current = recognition;
     setListening(true);
     try {
@@ -86,12 +97,15 @@ export default function Composer({ onSend, onStop, busy, webSearch, onToggleRese
     }
   }
 
-  return <div className="composer-wrap"><div className="composer">
-    <textarea ref={inputRef} value={value} onChange={(e) => { setValue(e.target.value); setVoiceError(""); requestAnimationFrame(resize); }} onInput={resize} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); } }} placeholder={busy ? "Ambi is responding…" : "Message Ambi…"} rows={1} aria-label="Message Ambi" />
+  const disabled = !value.trim() || busy || imageBusy;
+  return <div className="composer-wrap"><div className={`composer ${imageMode ? "composer-image-mode" : ""}`}>
+    {imageMode && <div className="composer-mode-label"><span className="image-mode-dot"/> Image generation · describe what you want</div>}
+    <textarea ref={inputRef} value={value} onChange={(e) => { setValue(e.target.value); setVoiceError(""); requestAnimationFrame(resize); }} onInput={resize} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); } }} placeholder={imageMode ? "Describe the image…" : busy ? "Ambi is responding…" : "Message Ambi…"} rows={1} aria-label={imageMode ? "Describe image" : "Message Ambi"} />
     <div className="composer-row"><div className="composer-tools">
       <button className={`tool ${webSearch ? "active" : ""}`} onClick={onToggleResearch} type="button" aria-pressed={webSearch}>⌁ Research</button>
       <button className={`tool ${listening ? "active" : ""}`} onClick={voice} type="button" aria-pressed={listening}>◉ {listening ? "Listening" : "Voice"}</button>
-    </div><span className="hint">Groq AI · Shift+Enter for a new line</span>{busy ? <button className="send stop" onClick={onStop} type="button">Stop</button> : <button className="send" onClick={send} type="button" disabled={!value.trim()}>Send</button>}</div>
+      <button className={`tool ${imageMode ? "active" : ""}`} onClick={() => setImageMode((v) => !v)} type="button" aria-pressed={imageMode}>✦ {imageMode ? "Image mode" : "Create image"}</button>
+    </div><span className="hint">{imageMode ? "Image API · OpenAI" : "Groq AI · Shift+Enter for a new line"}</span>{busy ? <button className="send stop" onClick={onStop} type="button">Stop</button> : <button className="send" onClick={send} type="button" disabled={disabled}>{imageMode ? "Generate" : "Send"}</button>}</div>
     {voiceError && <div className="composer-error" role="status">{voiceError}</div>}
   </div></div>;
 }
