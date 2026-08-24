@@ -40,6 +40,11 @@ export default function AmbiShell() {
   const activeModel = CLOUD_MODEL_CATALOG.find((model) => model.id === settings.model) ?? CLOUD_MODEL_CATALOG[0];
   const visibleConversations = useMemo(() => conversations.filter((item) => item.title.toLowerCase().includes(search.toLowerCase())), [conversations, search]);
 
+  async function refreshAiHealth() {
+    try { const response = await fetch("/api/health/groq", { cache: "no-store" }); setHealth((h) => ({ ...h, inference: response.ok ? "ready" : "error", network: "online", safeMode: !response.ok, recovery: response.ok ? "idle" : "safe" })); }
+    catch { setHealth((h) => ({ ...h, inference: "error", network: "offline", safeMode: true, recovery: "safe" })); }
+  }
+
   useEffect(() => {
     const syncNetwork = () => setHealth((h) => ({ ...h, network: navigator.onLine ? "online" : "offline" }));
     const onNew = () => { const chat = newConversation(); setConversations((items) => [chat, ...items]); setActiveId(chat.id); };
@@ -51,6 +56,7 @@ export default function AmbiShell() {
         const [saved, storedSettings, storedActive] = await Promise.all([memoryStore.loadConversations(), memoryStore.loadSettings(), memoryStore.loadActiveConversationId()]);
         const safeSettings = storedSettings ? { ...DEFAULT_SETTINGS, ...storedSettings, localOnly: false } : DEFAULT_SETTINGS;
         setConversations(saved); setSettings(safeSettings); setActiveId(storedActive && saved.some((c) => c.id === storedActive) ? storedActive : saved.find((c) => !c.archived)?.id ?? null);
+        await refreshAiHealth();
       } catch { setHealth((h) => ({ ...h, storage: "degraded", recovery: "safe", safeMode: true, lastRecoveryAt: Date.now() })); }
       finally { setHydrated(true); }
     })();
@@ -59,12 +65,6 @@ export default function AmbiShell() {
 
   useEffect(() => { if (!hydrated || settings.temporaryChat) return; void memoryStore.saveConversations(conversations).catch(() => setHealth((h) => ({ ...h, storage: "degraded" }))); }, [conversations, hydrated, settings.temporaryChat]);
   useEffect(() => { if (!hydrated) return; void memoryStore.saveSettings(settings).catch(() => undefined); void memoryStore.saveActiveConversationId(activeId).catch(() => undefined); document.documentElement.dataset.theme = settings.theme; document.documentElement.dataset.motion = settings.reducedMotion ? "reduced" : "full"; }, [settings, activeId, hydrated]);
-
-  async function refreshAiHealth() {
-    try { const response = await fetch("/api/health/groq", { cache: "no-store" }); setHealth((h) => ({ ...h, inference: response.ok ? "ready" : "error", network: "online", safeMode: !response.ok, recovery: response.ok ? "idle" : "safe" })); }
-    catch { setHealth((h) => ({ ...h, inference: "error", network: "offline", safeMode: true, recovery: "safe" })); }
-  }
-  useEffect(() => { if (hydrated) void refreshAiHealth(); }, [hydrated]);
 
   function createChat() { const chat = newConversation(); setConversations((items) => [chat, ...items]); setActiveId(chat.id); setHistoryOpen(false); }
   function deleteChat(id: string) { setConversations((items) => items.filter((item) => item.id !== id)); if (activeId === id) setActiveId(null); }
