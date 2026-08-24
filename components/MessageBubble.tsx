@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { Message } from "@/types/chat";
 
 function escapeHtml(value: string) {
@@ -57,7 +57,7 @@ function splitTableRow(line: string) {
 
 function renderBlock(block: string, keyPrefix: string) {
   const lines = block.replace(/^\n+|\n+$/g, "").split("\n");
-  const nodes: React.ReactNode[] = [];
+  const nodes: ReactNode[] = [];
   let normalLines: string[] = [];
 
   const flushNormal = () => {
