@@ -1,47 +1,14 @@
 import type { Message } from "@/types/chat";
 
 export default function MessageBubble({ message }: { message: Message }) {
-  const renderContent = (content: string) => content.split(/(```[\s\S]*?```)/g).map((part, index) => part.startsWith("```")
-    ? <pre className="code-block" key={index}><code>{part.replace(/^```[a-zA-Z0-9_-]*\n?/, "").replace(/```$/, "")}</code></pre>
-    : <span key={index}>{part}</span>);
-
-  const sourceLabel = message.source === "cloud"
-    ? "CLOUD AI"
-    : message.source === "web"
-      ? "WEB RESEARCH"
-      : message.source === "tool"
-        ? "TOOL"
-        : message.source === "local"
-          ? "LOCAL AI"
-          : null;
-
-  return (
-    <article className={`message ${message.role}`}>
-      <div className={`avatar ${message.role}`}>{message.role === "user" ? "You" : "A"}</div>
-      <div className="message-body">
-        <div className="message-meta">
-          <span>{message.role === "user" ? "You" : "Ambi"}</span>
-          {sourceLabel && <span className="source-badge">{sourceLabel}</span>}
-          {message.status === "streaming" && <span className="typing">● ● ●</span>}
-        </div>
-        <div className="bubble">{renderContent(message.content)}</div>
-        {message.citations?.length ? (
-          <div className="citations">
-            <div className="citations-title">Sources</div>
-            {message.citations.slice(0, 6).map((citation, index) => (
-              <a key={`${citation.url}-${index}`} href={citation.url} target="_blank" rel="noreferrer" className="citation">
-                <span>[{index + 1}]</span><span>{citation.title}</span>
-              </a>
-            ))}
-          </div>
-        ) : null}
-        {message.role === "assistant" && (
-          <div className="message-actions">
-            <button onClick={() => void navigator.clipboard?.writeText(message.content)}>Copy</button>
-            <button onClick={() => void navigator.share?.({ text: message.content })}>Share</button>
-          </div>
-        )}
-      </div>
-    </article>
-  );
+  const parts = message.content.split(/(```[\s\S]*?```)/g);
+  const source = message.source === "cloud" ? "GROQ AI" : message.source === "web" ? "WEB RESEARCH" : message.source === "local" ? "LOCAL" : null;
+  return <article className={`message ${message.role}`}>
+    <div className={`avatar ${message.role}`}>{message.role === "user" ? "You" : "A"}</div>
+    <div><div className="meta"><span>{message.role === "user" ? "You" : "Ambi"}</span>{source && <span className="source">{source}</span>}{message.status === "streaming" && <span className="streaming"><span/><span/><span/></span>}</div>
+      <div className={message.role === "user" ? "bubble user-bubble" : "bubble"}>{parts.map((part, i) => part.startsWith("```") ? <pre className="code" key={i}><code>{part.replace(/^```[\w-]*\n?/, "").replace(/```$/, "")}</code></pre> : <span key={i}>{part}</span>)}</div>
+      {message.citations?.length ? <div className="sources"><div className="sources-title">Sources</div>{message.citations.slice(0, 6).map((citation, i) => <a className="source-link" key={`${citation.url}-${i}`} href={citation.url} target="_blank" rel="noreferrer"><span>[{i + 1}]</span><span>{citation.title}</span></a>)}</div> : null}
+      {message.role === "assistant" && <div className="message-actions"><button onClick={() => void navigator.clipboard?.writeText(message.content)}>Copy</button><button onClick={() => { if (typeof navigator !== "undefined" && "share" in navigator) void navigator.share?.({ text: message.content }); }}>Share</button></div>}
+    </div>
+  </article>;
 }
