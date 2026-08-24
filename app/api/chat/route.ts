@@ -9,7 +9,12 @@ const encoder = new TextEncoder();
 const MAX_MESSAGES = 40;
 const MAX_CHARS = 12000;
 const MAX_OUTPUT = 4096;
-type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
+const MAX_IMAGE_DATA_URL = 8_000_000;
+const VISION_MODEL = process.env.AMBI_VISION_MODEL?.trim() || "qwen/qwen3.6-27b";
+type TextContent = { type: "text"; text: string };
+type ImageContent = { type: "image_url"; image_url: { url: string } };
+type ChatContent = string | Array<TextContent | ImageContent>;
+type ChatMessage = { role: "system" | "user" | "assistant"; content: ChatContent };
 type HistoryMessage = { role: "user" | "assistant"; content: string };
 type ProviderDelta = { choices?: Array<{ delta?: { content?: unknown } }> };
 
@@ -60,9 +65,7 @@ async function callGroq(model: string, messages: ChatMessage[], stream: boolean,
       throw error;
     }
     return { response };
-  } finally {
-    clearTimeout(timeout);
-  }
+  } finally { clearTimeout(timeout); }
 }
 
 function parseProviderLine(line: string, controller: ReadableStreamDefaultController<Uint8Array>, state: { sentText: boolean }): boolean {
@@ -73,19 +76,14 @@ function parseProviderLine(line: string, controller: ReadableStreamDefaultContro
   try {
     const data = JSON.parse(payload) as ProviderDelta;
     const text = data.choices?.[0]?.delta?.content;
-    if (typeof text === "string" && text) {
-      state.sentText = true;
-      controller.enqueue(sse({ type: "delta", text }));
-    }
-  } catch {
-    // Ignore malformed provider frames rather than breaking an otherwise valid stream.
-  }
+    if (typeof text === "string" && text) { state.sentText = true; controller.enqueue(sse({ type: "delta", text })); }
+  } catch { /* ignore malformed provider frames */ }
   return false;
 }
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  if (url.searchParams.get("probe") !== "1") return Response.json({ ok: true, provider: "groq", configured: Boolean(key()), model: modelOf(undefined), models: CLOUD_MODEL_CATALOG }, { headers: { "Cache-Control": "no-store" } });
+  if (url.searchParams.get("probe") !== "1") return Response.json({ ok: true, provider: "groq", configured: Boolean(key()), model: modelOf(undefined), visionModel: VISION_MODEL, models: CLOUD_MODEL_CATALOG }, { headers: { "Cache-Control": "no-store" } });
   const started = Date.now();
   try {
     const selected = modelOf(undefined);
@@ -93,7 +91,7 @@ export async function GET(request: Request) {
     const raw = await response.text();
     const parsed = JSON.parse(raw) as { choices?: Array<{ message?: { content?: unknown } }> };
     const text = parsed.choices?.[0]?.message?.content;
-    return Response.json({ ok: true, provider: "groq", model: selected, status: 200, latencyMs: Date.now() - started, reply: typeof text === "string" ? text : "" }, { headers: { "Cache-Control": "no-store" } });
+    return Response.json({ ok: true, provider: "groq", model: selected, visionModel: VISION_MODEL, status: 200, latencyMs: Date.now() - started, reply: typeof text === "string" ? text : "" }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const status = typeof (error as { status?: unknown }).status === "number" ? Number((error as { status?: number }).status) : 502;
     return Response.json({ ok: false, provider: "groq", configured: Boolean(key()), latencyMs: Date.now() - started, error: error instanceof Error ? error.message : "Groq probe failed." }, { status: status >= 500 ? 502 : status });
@@ -103,11 +101,20 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   if (!key()) return Response.json({ error: "Groq API key is not configured on this deployment." }, { status: 503 });
   try {
-    const body = await request.json() as { messages?: unknown; model?: unknown };
-    const selected = modelOf(body.model);
+    const body = await request.json() as { messages?: unknown; model?: unknown; imageDataUrl?: unknown };
+    const imageDataUrl = typeof body.imageDataUrl === "string" ? body.imageDataUrl : "";
+    if (imageDataUrl && (!imageDataUrl.startsWith("data:image/") || imageDataUrl.length > MAX_IMAGE_DATA_URL)) return Response.json({ error: "The attached image is invalid or too large." }, { status: 400 });
     const history = normalize(body.messages);
     if (!history.length) return Response.json({ error: "No chat messages were provided." }, { status: 400 });
+    const selected = imageDataUrl ? VISION_MODEL : modelOf(body.model);
     const messages: ChatMessage[] = [{ role: "system", content: SYSTEM_PROMPT }, ...history];
+    if (imageDataUrl) {
+      const lastUser = messages.findLastIndex((item) => item.role === "user");
+      if (lastUser >= 0) {
+        const original = typeof messages[lastUser].content === "string" ? messages[lastUser].content : "Please analyze the attached image.";
+        messages[lastUser] = { role: "user", content: [{ type: "text", text: original }, { type: "image_url", image_url: { url: imageDataUrl } }] };
+      }
+    }
     const { response } = await callGroq(selected, messages, true, request.signal);
     if (!response.body) return Response.json({ error: "Groq returned no response stream." }, { status: 502 });
 
@@ -126,25 +133,17 @@ export async function POST(request: Request) {
             buffer = lines.pop() ?? "";
             for (const line of lines) parseProviderLine(line, controller, state);
           }
-
           buffer += decoder.decode();
           if (buffer.trim()) parseProviderLine(buffer, controller, state);
-
           if (!state.sentText) controller.enqueue(sse({ type: "error", code: "EMPTY_RESPONSE", message: "Groq returned an empty response. Please try again." }));
           else controller.enqueue(sse({ type: "done" }));
           controller.close();
         } catch (error) {
-          if (!request.signal.aborted) {
-            controller.enqueue(sse({ type: "error", code: "STREAM", message: error instanceof Error ? error.message : "Groq stream failed." }));
-            controller.close();
-          }
-        } finally {
-          reader.releaseLock();
-        }
+          if (!request.signal.aborted) { controller.enqueue(sse({ type: "error", code: "STREAM", message: error instanceof Error ? error.message : "Groq stream failed." })); controller.close(); }
+        } finally { reader.releaseLock(); }
       },
       cancel() { void reader.cancel(); },
     });
-
     return new Response(stream, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-store, must-revalidate", Connection: "keep-alive", "X-Content-Type-Options": "nosniff", "X-Ambi-Provider": "groq", "X-Ambi-Model": selected } });
   } catch (error) {
     if (request.signal.aborted) return new Response(null, { status: 499 });
