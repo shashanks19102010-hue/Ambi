@@ -1,15 +1,2 @@
-export default function manifest() {
-  return {
-    name: "Ambi — Local AI Workspace",
-    short_name: "Ambi",
-    description: "Local-first AI assistant for private conversations, coding, research and study.",
-    start_url: "/",
-    display: "standalone",
-    background_color: "#fbfbfa",
-    theme_color: "#11110f",
-    icons: [
-      { src: "/ambi-logo-192.svg", sizes: "192x192", type: "image/svg+xml", purpose: "any maskable" },
-      { src: "/ambi-logo.png", sizes: "512x512", type: "image/png", purpose: "any maskable" }
-    ]
-  };
-}
+import type { MetadataRoute } from "next";
+export default function manifest(): MetadataRoute.Manifest { return { name: "Ambi — Calm AI Workspace", short_name: "Ambi", description: "A calm, capable AI workspace powered by Groq Cloud AI.", start_url: "/", display: "standalone", background_color: "#f4f1ea", theme_color: "#f4f1ea", icons: [{ src: "/ambi-logo-192.png", sizes: "192x192", type: "image/png", purpose: "any maskable" }, { src: "/ambi-logo.png", sizes: "512x512", type: "image/png", purpose: "any maskable" }] }; }
