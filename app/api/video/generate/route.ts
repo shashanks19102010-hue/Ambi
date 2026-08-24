@@ -5,6 +5,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const ENDPOINT = "https://openrouter.ai/api/v1/videos";
+const requestHeaders = (apiKey: string) => ({ Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", "HTTP-Referer": "https://ambi-ai.vercel.app", "X-Title": "Ambi AI" });
 
 function authError() { return NextResponse.json({ error: "Video generation is not configured. Add OPENROUTER_API_KEY in Vercel." }, { status: 503 }); }
 
@@ -20,18 +21,36 @@ export async function POST(request: Request) {
   try {
     const response = await fetch(ENDPOINT, {
       method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", "HTTP-Referer": "https://ambi-ai.vercel.app", "X-Title": "Ambi AI" },
+      headers: requestHeaders(apiKey),
       body: JSON.stringify({ model: body.model || process.env.OPENROUTER_VIDEO_MODEL || "bytedance/seedance-2.0", prompt, duration: Math.min(Math.max(body.duration || 5, 4), 15), resolution: body.resolution || "720p", aspect_ratio: body.aspectRatio || "16:9", audio: body.generateAudio !== false }),
       cache: "no-store",
       signal: AbortSignal.timeout(50000),
     });
-    const payload = await response.json().catch(() => ({})) as { id?: string; status?: string; url?: string; error?: { message?: string } | string };
+    const payload = await response.json().catch(() => ({})) as { id?: string; status?: string; url?: string; poll_url?: string; error?: { message?: string } | string };
     if (!response.ok) {
       const detail = typeof payload.error === "string" ? payload.error : payload.error?.message;
       return NextResponse.json({ error: detail || `Video generation failed (${response.status}).` }, { status: response.status });
     }
-    return NextResponse.json({ ok: true, provider: "openrouter", jobId: payload.id, status: payload.status || "queued", url: payload.url || null }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ ok: true, provider: "openrouter", jobId: payload.id, status: payload.status || "queued", url: payload.url || null, pollUrl: payload.poll_url || (payload.id ? `/api/video/generate?jobId=${encodeURIComponent(payload.id)}` : null) }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Video generation request failed." }, { status: 504 });
+  }
+}
+
+export async function GET(request: Request) {
+  const apiKey = process.env.OPENROUTER_API_KEY?.trim();
+  if (!apiKey) return authError();
+  const jobId = new URL(request.url).searchParams.get("jobId")?.trim();
+  if (!jobId) return NextResponse.json({ error: "Missing video job id." }, { status: 400 });
+  try {
+    const response = await fetch(`${ENDPOINT}/${encodeURIComponent(jobId)}`, { headers: requestHeaders(apiKey), cache: "no-store", signal: AbortSignal.timeout(30000) });
+    const payload = await response.json().catch(() => ({})) as { id?: string; status?: string; url?: string; video_url?: string; error?: { message?: string } | string };
+    if (!response.ok) {
+      const detail = typeof payload.error === "string" ? payload.error : payload.error?.message;
+      return NextResponse.json({ error: detail || `Video status failed (${response.status}).` }, { status: response.status });
+    }
+    return NextResponse.json({ ok: true, jobId: payload.id || jobId, status: payload.status || "processing", url: payload.url || payload.video_url || null }, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Video status request failed." }, { status: 504 });
   }
 }
