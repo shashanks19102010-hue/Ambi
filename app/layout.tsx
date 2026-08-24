@@ -1,10 +1,6 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Manrope } from "next/font/google";
 import "./globals.css";
 import PWARegister from "@/components/PWARegister";
-
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
-const manrope = Manrope({ subsets: ["latin"], variable: "--font-manrope", display: "swap" });
 
 export const metadata: Metadata = {
   title: "Ambi — Calm AI Workspace",
@@ -21,5 +17,5 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body className={`${inter.variable} ${manrope.variable}`}><PWARegister />{children}</body></html>;
+  return <html lang="en"><body>{children}<PWARegister /></body></html>;
 }
