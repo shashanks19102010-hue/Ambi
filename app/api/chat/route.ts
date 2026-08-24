@@ -11,6 +11,7 @@ const MAX_CHARS = 12000;
 const MAX_OUTPUT = 4096;
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 type HistoryMessage = { role: "user" | "assistant"; content: string };
+type ProviderDelta = { choices?: Array<{ delta?: { content?: unknown } }> };
 
 function key() { return process.env.GROQ_API_KEY?.trim() || process.env.AI_GATEWAY_API_KEY?.trim() || ""; }
 function modelOf(value: unknown) { return typeof value === "string" && CLOUD_MODEL_CATALOG.some((m) => m.id === value) ? value : DEFAULT_CLOUD_MODEL_ID; }
@@ -48,11 +49,38 @@ async function callGroq(model: string, messages: ChatMessage[], stream: boolean,
     const raw = response.ok && stream ? null : await response.text();
     if (!response.ok) {
       let detail = `Groq returned HTTP ${response.status}.`;
-      if (raw) { try { const parsed = JSON.parse(raw) as { error?: { message?: unknown } }; if (typeof parsed.error?.message === "string") detail = parsed.error.message; } catch { detail = raw.slice(0, 400); } }
-      const error = new Error(detail) as Error & { status?: number }; error.status = response.status; throw error;
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as { error?: { message?: unknown } };
+          if (typeof parsed.error?.message === "string") detail = parsed.error.message;
+        } catch { detail = raw.slice(0, 400); }
+      }
+      const error = new Error(detail) as Error & { status?: number };
+      error.status = response.status;
+      throw error;
     }
     return { response };
-  } finally { clearTimeout(timeout); }
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function parseProviderLine(line: string, controller: ReadableStreamDefaultController<Uint8Array>, state: { sentText: boolean }): boolean {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith("data:")) return false;
+  const payload = trimmed.slice(5).trim();
+  if (!payload || payload === "[DONE]") return false;
+  try {
+    const data = JSON.parse(payload) as ProviderDelta;
+    const text = data.choices?.[0]?.delta?.content;
+    if (typeof text === "string" && text) {
+      state.sentText = true;
+      controller.enqueue(sse({ type: "delta", text }));
+    }
+  } catch {
+    // Ignore malformed provider frames rather than breaking an otherwise valid stream.
+  }
+  return false;
 }
 
 export async function GET(request: Request) {
@@ -82,10 +110,11 @@ export async function POST(request: Request) {
     const messages: ChatMessage[] = [{ role: "system", content: SYSTEM_PROMPT }, ...history];
     const { response } = await callGroq(selected, messages, true, request.signal);
     if (!response.body) return Response.json({ error: "Groq returned no response stream." }, { status: 502 });
+
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
-    let sentText = false;
+    const state = { sentText: false };
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
         try {
@@ -93,26 +122,29 @@ export async function POST(request: Request) {
             const { value, done } = await reader.read();
             if (done) break;
             buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n"); buffer = lines.pop() ?? "";
-            for (const line of lines) {
-              const trimmed = line.trim(); if (!trimmed.startsWith("data:")) continue;
-              const payload = trimmed.slice(5).trim(); if (!payload || payload === "[DONE]") continue;
-              try {
-                const data = JSON.parse(payload) as { choices?: Array<{ delta?: { content?: unknown } }> };
-                const text = data.choices?.[0]?.delta?.content;
-                if (typeof text === "string" && text) { sentText = true; controller.enqueue(sse({ type: "delta", text })); }
-              } catch { /* ignore malformed provider frame */ }
-            }
+            const lines = buffer.split("\n");
+            buffer = lines.pop() ?? "";
+            for (const line of lines) parseProviderLine(line, controller, state);
           }
-          if (!sentText) controller.enqueue(sse({ type: "error", code: "EMPTY_RESPONSE", message: "Groq returned an empty response." }));
+
+          buffer += decoder.decode();
+          if (buffer.trim()) parseProviderLine(buffer, controller, state);
+
+          if (!state.sentText) controller.enqueue(sse({ type: "error", code: "EMPTY_RESPONSE", message: "Groq returned an empty response. Please try again." }));
           else controller.enqueue(sse({ type: "done" }));
           controller.close();
         } catch (error) {
-          if (!request.signal.aborted) { controller.enqueue(sse({ type: "error", code: "STREAM", message: error instanceof Error ? error.message : "Groq stream failed." })); controller.close(); }
-        } finally { reader.releaseLock(); }
+          if (!request.signal.aborted) {
+            controller.enqueue(sse({ type: "error", code: "STREAM", message: error instanceof Error ? error.message : "Groq stream failed." }));
+            controller.close();
+          }
+        } finally {
+          reader.releaseLock();
+        }
       },
       cancel() { void reader.cancel(); },
     });
+
     return new Response(stream, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-store, must-revalidate", Connection: "keep-alive", "X-Content-Type-Options": "nosniff", "X-Ambi-Provider": "groq", "X-Ambi-Model": selected } });
   } catch (error) {
     if (request.signal.aborted) return new Response(null, { status: 499 });
