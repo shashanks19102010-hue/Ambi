@@ -1,4 +1,4 @@
-import { DB_NAME, DB_VERSION, DEFAULT_CLOUD_MODEL_ID, DEFAULT_MODEL_ID, MAX_CONVERSATIONS, CLOUD_MODEL_CATALOG, MODEL_CATALOG, STORE_NAME } from "@/lib/constants";
+import { DB_NAME, DB_VERSION, DEFAULT_CLOUD_MODEL_ID, MAX_CONVERSATIONS, CLOUD_MODEL_CATALOG, STORE_NAME } from "@/lib/constants";
 import type { AppSettings, Conversation, MemoryItem } from "@/types/chat";
 
 type RecordValue = { key: string; value: unknown };
@@ -48,16 +48,11 @@ const validConversations = (value: unknown): Conversation[] => {
     .slice(0, MAX_CONVERSATIONS);
 };
 
-const knownCloudModel = (id: string) => CLOUD_MODEL_CATALOG.some((item) => item.id === id);
-const knownLocalModel = (id: string) => MODEL_CATALOG.some((item) => item.id === id);
-
 const normalizeSettings = (value: unknown): AppSettings | null => {
   if (!value || typeof value !== "object") return null;
   const candidate = value as Partial<AppSettings>;
   const requestedModel = typeof candidate.model === "string" ? candidate.model : "";
-  const model = knownCloudModel(requestedModel)
-    ? requestedModel
-    : DEFAULT_CLOUD_MODEL_ID;
+  const model = CLOUD_MODEL_CATALOG.some((item) => item.id === requestedModel) ? requestedModel : DEFAULT_CLOUD_MODEL_ID;
 
   return {
     model,
@@ -89,8 +84,7 @@ export const memoryStore = {
     await write("activeConversationId", id);
   },
   async loadSettings() {
-    const current = await read<unknown>("settings");
-    return normalizeSettings(current);
+    return normalizeSettings(await read<unknown>("settings"));
   },
   async saveSettings(settings: AppSettings) {
     await write("settings", settings);
@@ -120,6 +114,3 @@ export const memoryStore = {
     });
   },
 };
-
-void DEFAULT_MODEL_ID;
-void knownLocalModel;
