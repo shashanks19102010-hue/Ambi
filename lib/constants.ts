@@ -8,12 +8,19 @@ export const MAX_MESSAGE_LENGTH = 12_000;
 export const MAX_CONVERSATIONS = 500;
 
 export const DEFAULT_CLOUD_MODEL_ID = "openai/gpt-oss-120b";
+export const WASM_FALLBACK_MODEL_ID = "wasm:SmolLM2-360M-Instruct";
+
+// Retained only for device-capability compatibility. Ambi chat itself uses Groq Cloud AI.
+export const MODEL_CATALOG = [
+  { id: "SmolLM2-360M-Instruct-q4f32_1-MLC", name: "Local placeholder", tier: "Basic", runtime: "webgpu" },
+  { id: WASM_FALLBACK_MODEL_ID, name: "Local CPU placeholder", tier: "Basic", runtime: "wasm" },
+] as const;
 
 export const CLOUD_MODEL_CATALOG = [
   { id: "openai/gpt-oss-120b", name: "GPT OSS 120B", description: "Best overall for reasoning, coding and advanced tasks.", contextWindow: 131072, maxOutputTokens: 65536 },
   { id: "openai/gpt-oss-20b", name: "GPT OSS 20B", description: "Very fast reasoning for everyday conversations and coding.", contextWindow: 131072, maxOutputTokens: 65536 },
   { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B", description: "Strong general chat and multilingual responses.", contextWindow: 131072, maxOutputTokens: 32768 },
-  { id: "llama-3.1-8b-instant", name: "Llama 3.1 8B Instant", description: "Fastest lightweight option for quick answers.", contextWindow: 131072, maxOutputTokens: 8192 },
+  { id: "llama-3.1-8b-instant", name: "Llama 3.1 8B Instant", description: "Fast lightweight option for quick answers.", contextWindow: 131072, maxOutputTokens: 8192 },
 ] as const;
 
 export const DEFAULT_SETTINGS: AppSettings = {
