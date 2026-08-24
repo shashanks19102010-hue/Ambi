@@ -17,18 +17,19 @@ export default function MemoryPanel() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
 
-  const refresh = async () => {
-    setLoading(true);
-    try {
-      setMemories(await memoryStore.loadMemories());
-    } catch {
-      setMessage("Memory storage is unavailable on this device.");
-    } finally {
+  useEffect(() => {
+    let active = true;
+    memoryStore.loadMemories().then((items) => {
+      if (!active) return;
+      setMemories(items);
       setLoading(false);
-    }
-  };
-
-  useEffect(() => { void refresh(); }, []);
+    }).catch(() => {
+      if (!active) return;
+      setMessage("Memory storage is unavailable on this device.");
+      setLoading(false);
+    });
+    return () => { active = false; };
+  }, []);
 
   const startEdit = (memory: MemoryItem) => {
     setEditingId(memory.id);
