@@ -22,11 +22,11 @@ export default function EmptyState({
       </div>
 
       <div className="welcome-copy">
-        <p className="welcome-kicker">LOCAL-FIRST · CALM BY DESIGN</p>
+        <p className="welcome-kicker">CALM BY DESIGN · GROQ AI</p>
         <h1 id="welcome-title">What are we creating today?</h1>
         <p className="welcome-subtitle">
-          Ambi is a quiet, capable workspace for conversation, coding,
-          research, study, and private thinking — with local AI at its core.
+          Ambi is a calm, capable workspace for conversation, coding, research,
+          study, and focused thinking — with your privacy controls always in view.
         </p>
       </div>
 
@@ -49,7 +49,7 @@ export default function EmptyState({
       </div>
 
       <div className="capability-strip" aria-label="Ambi capabilities">
-        <span>Local AI</span>
+        <span>Groq AI</span>
         <i />
         <span>Private Memory</span>
         <i />
@@ -59,8 +59,8 @@ export default function EmptyState({
       </div>
 
       <p className="privacy-note">
-        <span>LOCAL</span> Your chat remains on this device unless you explicitly
-        enable an external feature such as web research.
+        <span>CONTROLLED</span> Your chat stays local until you explicitly use an
+        external feature such as cloud AI or web research.
       </p>
     </section>
   );
