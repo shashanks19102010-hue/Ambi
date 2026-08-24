@@ -9,11 +9,12 @@ const encoder = new TextEncoder();
 const MAX_MESSAGES = 40;
 const MAX_CHARS = 12000;
 const MAX_OUTPUT = 4096;
+type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
 function key() { return process.env.GROQ_API_KEY?.trim() || process.env.AI_GATEWAY_API_KEY?.trim() || ""; }
 function modelOf(value: unknown) { return typeof value === "string" && CLOUD_MODEL_CATALOG.some((m) => m.id === value) ? value : DEFAULT_CLOUD_MODEL_ID; }
-function normalize(input: unknown) {
-  if (!Array.isArray(input)) return [] as Array<{ role: "user" | "assistant"; content: string }>;
+function normalize(input: unknown): Array<{ role: "user" | "assistant"; content: string }> {
+  if (!Array.isArray(input)) return [];
   return input.slice(-MAX_MESSAGES).flatMap((item) => {
     if (!item || typeof item !== "object") return [];
     const role = (item as { role?: unknown }).role;
@@ -27,7 +28,7 @@ function normalize(input: unknown) {
 }
 function sse(event: unknown) { return encoder.encode(`data: ${JSON.stringify(event)}\n\n`); }
 
-async function callGroq(model: string, messages: Array<{ role: "system" | "user" | "assistant"; content: string }>, stream: boolean, signal?: AbortSignal) {
+async function callGroq(model: string, messages: ChatMessage[], stream: boolean, signal?: AbortSignal) {
   const apiKey = key();
   if (!apiKey) throw new Error("Groq API key is not configured on this deployment.");
   const controller = new AbortController();
@@ -45,7 +46,7 @@ async function callGroq(model: string, messages: Array<{ role: "system" | "user"
     if (!response.ok) {
       let detail = `Groq returned HTTP ${response.status}.`;
       if (raw) { try { const parsed = JSON.parse(raw) as { error?: { message?: unknown } }; if (typeof parsed.error?.message === "string") detail = parsed.error.message; } catch { detail = raw.slice(0, 400); } }
-      const error = new Error(detail); (error as Error & { status?: number }).status = response.status; throw error;
+      const error = new Error(detail) as Error & { status?: number }; error.status = response.status; throw error;
     }
     return { response };
   } finally { clearTimeout(timeout); }
@@ -69,14 +70,14 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const apiKey = key();
-  if (!apiKey) return Response.json({ error: "Groq API key is not configured on this deployment." }, { status: 503 });
+  if (!key()) return Response.json({ error: "Groq API key is not configured on this deployment." }, { status: 503 });
   try {
     const body = await request.json() as { messages?: unknown; model?: unknown };
     const selected = modelOf(body.model);
     const history = normalize(body.messages);
     if (!history.length) return Response.json({ error: "No chat messages were provided." }, { status: 400 });
-    const { response } = await callGroq(selected, [{ role: "system", content: SYSTEM_PROMPT }, ...history], true, request.signal);
+    const messages: ChatMessage[] = [{ role: "system", content: SYSTEM_PROMPT }, ...history];
+    const { response } = await callGroq(selected, messages, true, request.signal);
     if (!response.body) return Response.json({ error: "Groq returned no response stream." }, { status: 502 });
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
