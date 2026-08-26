@@ -1,0 +1,32 @@
+/* Runtime theme and contrast fixes. Loaded after the main Ambi styles. */
+html,body{background:var(--bg);color:var(--text)}
+html[data-theme="dark"],html[data-theme="oled"]{color-scheme:dark}
+html[data-theme="light"],html[data-theme="system"]{color-scheme:light}
+html[data-theme="dark"] body,html[data-theme="oled"] body{background:var(--bg);color:var(--text)}
+html[data-theme="dark"] .ambi,html[data-theme="oled"] .ambi{background:var(--bg);color:var(--text)}
+html[data-theme="dark"] .sidebar,html[data-theme="oled"] .sidebar{background:var(--card);color:var(--text)}
+html[data-theme="dark"] .topbar,html[data-theme="oled"] .topbar{background:color-mix(in srgb,var(--bg) 90%,transparent);color:var(--text)}
+html[data-theme="dark"] .nav button,html[data-theme="oled"] .nav button{color:var(--text)}
+html[data-theme="dark"] .search,html[data-theme="dark"] .search input,html[data-theme="oled"] .search,html[data-theme="oled"] .search input{color:var(--text)}
+html[data-theme="dark"] .composer,html[data-theme="oled"] .composer{background:var(--card);color:var(--text)}
+html[data-theme="dark"] .suggestion,html[data-theme="oled"] .suggestion{background:var(--card);color:var(--text)}
+html[data-theme="dark"] .modal,html[data-theme="oled"] .modal{background:var(--card);color:var(--text)}
+
+/* Keep the mobile navigation opaque and readable above the dimmed page. */
+.mobile-nav,.mobile-drawer{background:var(--card)!important;color:var(--text)!important;opacity:1!important;backdrop-filter:blur(22px)}
+.mobile-nav-backdrop,.mobile-drawer-backdrop{background:rgba(12,15,12,.48)!important}
+.mobile-nav button,.mobile-drawer button,.mobile-recent{color:var(--text)!important}
+.mobile-nav-links button:hover,.mobile-drawer-nav button:hover,.mobile-recent:hover{background:var(--sage-soft)!important}
+
+/* Make text/SVG icons visible in every theme. */
+.nav button,.nav button span,.mobile-nav button,.mobile-drawer button,.settings-btn,.mobile-menu,.close{color:var(--text)}
+.nav button svg,.mobile-nav button svg,.mobile-drawer button svg,.settings-btn svg,.mobile-menu svg,.close svg{color:currentColor;stroke:currentColor}
+
+/* Avoid a pale disabled control becoming invisible. */
+button:disabled{color:var(--muted)}
+
+/* Status contrast. */
+.connection-pill{color:var(--muted)}
+.connection-pill.health-healthy,.connection-pill.ready{color:var(--sage)!important}
+html[data-theme="dark"] .connection-pill.health-degraded{color:#e1c47e!important}
+html[data-theme="dark"] .connection-pill.health-down{color:#e59a91!important}
