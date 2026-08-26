@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import "./ambi-overrides.css";
+import "./theme-fix.css";
 import PWARegister from "@/components/PWARegister";
 
 export const metadata: Metadata = {
