@@ -18,6 +18,7 @@ type ChatContent = string | Array<TextContent | ImageContent>;
 type ChatMessage = { role: "system" | "user" | "assistant"; content: ChatContent };
 type HistoryMessage = { role: "user" | "assistant"; content: string };
 type ProviderDelta = { choices?: Array<{ delta?: { content?: unknown } }> };
+type ProviderError = Error & { status?: number; retryAfter?: string };
 
 function key() { return process.env.GROQ_API_KEY?.trim() || process.env.AI_GATEWAY_API_KEY?.trim() || ""; }
 function modelOf(value: unknown) { return typeof value === "string" && CLOUD_MODEL_CATALOG.some((m) => m.id === value) ? value : DEFAULT_CLOUD_MODEL_ID; }
@@ -61,7 +62,7 @@ async function callGroq(model: string, messages: ChatMessage[], stream: boolean,
           if (typeof parsed.error?.message === "string") detail = parsed.error.message;
         } catch { detail = raw.slice(0, 400); }
       }
-      const error = new Error(detail) as Error & { status?: number; retryAfter?: string };
+      const error = new Error(detail) as ProviderError;
       error.status = response.status;
       error.retryAfter = response.headers.get("retry-after") || undefined;
       throw error;
@@ -83,8 +84,8 @@ function parseProviderLine(line: string, controller: ReadableStreamDefaultContro
   return false;
 }
 
-function providerHeaders(error: unknown) {
-  const retryAfter = (error as { retryAfter?: unknown }).retryAfter;
+function providerHeaders(error: unknown): HeadersInit {
+  const retryAfter = (error as ProviderError).retryAfter;
   return typeof retryAfter === "string" && retryAfter ? { "Retry-After": retryAfter } : {};
 }
 
@@ -100,7 +101,7 @@ export async function GET(request: Request) {
     const text = parsed.choices?.[0]?.message?.content;
     return Response.json({ ok: true, provider: "groq", model: selected, visionModel: VISION_MODEL, status: 200, latencyMs: Date.now() - started, reply: typeof text === "string" ? text : "" }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    const status = typeof (error as { status?: unknown }).status === "number" ? Number((error as { status?: number }).status) : 502;
+    const status = typeof (error as ProviderError).status === "number" ? Number((error as ProviderError).status) : 502;
     return Response.json({ ok: false, provider: "groq", configured: Boolean(key()), latencyMs: Date.now() - started, error: error instanceof Error ? error.message : "Groq probe failed." }, { status: status >= 500 ? 502 : status, headers: providerHeaders(error) });
   }
 }
@@ -121,7 +122,8 @@ export async function POST(request: Request) {
       let lastUser = -1;
       for (let index = messages.length - 1; index >= 0; index -= 1) { if (messages[index].role === "user") { lastUser = index; break; } }
       if (lastUser >= 0) {
-        const original = typeof messages[lastUser].content === "string" ? messages[lastUser].content : "Please analyze the attached image.";
+        const originalContent = messages[lastUser].content;
+        const original = typeof originalContent === "string" ? originalContent : "Please analyze the attached image.";
         messages[lastUser] = { role: "user", content: [{ type: "text", text: original }, { type: "image_url", image_url: { url: imageDataUrl } }] };
       }
     }
@@ -157,7 +159,7 @@ export async function POST(request: Request) {
     return new Response(stream, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-store, must-revalidate", Connection: "keep-alive", "X-Content-Type-Options": "nosniff", "X-Ambi-Provider": "groq", "X-Ambi-Model": selected } });
   } catch (error) {
     if (request.signal.aborted) return new Response(null, { status: 499 });
-    const status = typeof (error as { status?: unknown }).status === "number" ? Number((error as { status?: number }).status) : 502;
+    const status = typeof (error as ProviderError).status === "number" ? Number((error as ProviderError).status) : 502;
     return Response.json({ error: error instanceof Error ? error.message : "Groq request failed." }, { status: status >= 500 ? 502 : status, headers: providerHeaders(error) });
   }
 }
