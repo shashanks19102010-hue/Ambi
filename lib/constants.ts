@@ -1,4 +1,5 @@
 import type { AppSettings } from "@/types/chat";
+import { DEFAULT_PUTER_IMAGE_MODEL, DEFAULT_PUTER_VIDEO_MODEL } from "@/lib/media/puter-models";
 
 export const APP_NAME = "Ambi";
 export const DB_NAME = "ambi-local";
@@ -11,7 +12,6 @@ export const DEFAULT_MODEL_ID = "SmolLM2-360M-Instruct-q4f32_1-MLC";
 export const WASM_FALLBACK_MODEL_ID = "wasm:SmolLM2-360M-Instruct";
 export const DEFAULT_CLOUD_MODEL_ID = "openai/gpt-oss-120b";
 
-// Compatibility metadata for capability detection only. Chat execution is cloud-first via Groq.
 export const MODEL_CATALOG = [
   { id: DEFAULT_MODEL_ID, name: "Local placeholder", tier: "Basic", runtime: "webgpu" },
   { id: "Llama-3.2-3B-Instruct-q4f16_1-MLC", name: "Local powerful placeholder", tier: "Powerful", runtime: "webgpu" },
@@ -27,6 +27,8 @@ export const CLOUD_MODEL_CATALOG = [
 
 export const DEFAULT_SETTINGS: AppSettings = {
   model: DEFAULT_CLOUD_MODEL_ID,
+  imageModel: DEFAULT_PUTER_IMAGE_MODEL,
+  videoModel: DEFAULT_PUTER_VIDEO_MODEL,
   webSearch: false,
   safetyMode: "strict",
   memoryEnabled: true,
