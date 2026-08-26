@@ -19,7 +19,7 @@ type ChatMessage = { role: "system" | "user" | "assistant"; content: ChatContent
 type HistoryMessage = { role: "user" | "assistant"; content: string };
 type ProviderDelta = { choices?: Array<{ delta?: { content?: unknown } }> };
 
-function key() { return process.env.GROQ_API_KEY?.trim() || process.env.AI_GATEWAY_API_KEY?.trim() || ""; }
+function key() { return process.env.GROQ_API_KEY?.trim() || ""; }
 function modelOf(value: unknown) { return typeof value === "string" && CLOUD_MODEL_CATALOG.some((m) => m.id === value) ? value : DEFAULT_CLOUD_MODEL_ID; }
 function normalize(input: unknown): HistoryMessage[] {
   if (!Array.isArray(input)) return [];
@@ -63,7 +63,8 @@ async function callGroq(model: string, messages: ChatMessage[], stream: boolean,
       }
       const error = new Error(detail) as Error & { status?: number; retryAfter?: string };
       error.status = response.status;
-      error.retryAfter = response.headers.get("retry-after") || undefined;
+      const retryAfter = response.headers.get("retry-after");
+      if (retryAfter) error.retryAfter = retryAfter;
       throw error;
     }
     return { response };
@@ -83,7 +84,7 @@ function parseProviderLine(line: string, controller: ReadableStreamDefaultContro
   return false;
 }
 
-function providerHeaders(error: unknown) {
+function providerHeaders(error: unknown): HeadersInit {
   const retryAfter = (error as { retryAfter?: unknown }).retryAfter;
   return typeof retryAfter === "string" && retryAfter ? { "Retry-After": retryAfter } : {};
 }
