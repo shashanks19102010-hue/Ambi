@@ -109,7 +109,8 @@ export async function POST(request: Request) {
     const selected = imageDataUrl ? VISION_MODEL : modelOf(body.model);
     const messages: ChatMessage[] = [{ role: "system", content: SYSTEM_PROMPT }, ...history];
     if (imageDataUrl) {
-      const lastUser = messages.findLastIndex((item) => item.role === "user");
+      let lastUser = -1;
+      for (let index = messages.length - 1; index >= 0; index -= 1) { if (messages[index].role === "user") { lastUser = index; break; } }
       if (lastUser >= 0) {
         const original = typeof messages[lastUser].content === "string" ? messages[lastUser].content : "Please analyze the attached image.";
         messages[lastUser] = { role: "user", content: [{ type: "text", text: original }, { type: "image_url", image_url: { url: imageDataUrl } }] };
