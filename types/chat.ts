@@ -4,7 +4,9 @@ export type MessageStatus = "complete" | "streaming" | "error";
 export interface Citation { title: string; url: string; snippet?: string; }
 export interface ImageAttachment { type: "image"; dataUrl: string; alt: string; }
 export interface VideoAttachment { type: "video"; url: string; alt: string; }
+export interface AudioAttachment { type: "audio"; url: string; alt: string; }
 export interface ImageGenerationState { type: "image"; phase: "preparing" | "creating" | "finishing"; }
+export type MediaAttachment = ImageAttachment | VideoAttachment | AudioAttachment;
 
 export interface Message {
   id: string;
@@ -15,7 +17,7 @@ export interface Message {
   branchId?: string;
   source?: "local" | "web" | "tool" | "cloud";
   citations?: Citation[];
-  media?: ImageAttachment | VideoAttachment;
+  media?: MediaAttachment;
   generation?: ImageGenerationState;
 }
 
