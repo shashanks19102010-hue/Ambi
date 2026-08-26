@@ -15,7 +15,7 @@ function renderRichText(source: string) {
     if (part.startsWith("\\[") && part.endsWith("\\]")) return renderMath(part.slice(2, -2));
     if (part.startsWith("$$") && part.endsWith("$$")) return renderMath(part.slice(2, -2));
     if (part.startsWith("\\(") && part.endsWith("\\)")) return `<span class="math-inline">${renderMath(part.slice(2, -2))}</span>`;
-    let html = part.replace(/`([^`]+)`/g, "<code class=\"inline-code\">$1</code>").replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/__([^_]+)__/g, "<strong>$1</strong>").replace(/\*([^*]+)\*/g, "<em>$1</em>").replace(/^###\s+(.+)$/gm, "<strong class=\"md-heading md-h3\">$1</strong>").replace(/^##\s+(.+)$/gm, "<strong class=\"md-heading md-h2\">$1</strong>").replace(/^#\s+(.+)$/gm, "<strong class=\"md-heading md-h1\">$1</strong>").replace(/(^|\n)(\s*[-*])\s/g, "$1<span class=\"list-marker\">•</span> ").replace(/(^|\n)(\s*\d+\.)\s/g, "$1<span class=\"list-marker\">$2</span> ").replace(/\n/g, "<br />");
+    const html = part.replace(/`([^`]+)`/g, "<code class=\"inline-code\">$1</code>").replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/__([^_]+)__/g, "<strong>$1</strong>").replace(/\*([^*]+)\*/g, "<em>$1</em>").replace(/^###\s+(.+)$/gm, "<strong class=\"md-heading md-h3\">$1</strong>").replace(/^##\s+(.+)$/gm, "<strong class=\"md-heading md-h2\">$1</strong>").replace(/^#\s+(.+)$/gm, "<strong class=\"md-heading md-h1\">$1</strong>").replace(/(^|\n)(\s*[-*])\s/g, "$1<span class=\"list-marker\">•</span> ").replace(/(^|\n)(\s*\d+\.)\s/g, "$1<span class=\"list-marker\">$2</span> ").replace(/\n/g, "<br />");
     return html;
   }).join("");
 }
