@@ -6,18 +6,12 @@ export const dynamic = "force-dynamic";
 const ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
 
 function getKey() {
-  return process.env.GROQ_API_KEY?.trim() || process.env.AI_GATEWAY_API_KEY?.trim() || "";
-}
-
-function getModel() {
-  const configured = process.env.AMBI_CLOUD_MODEL?.trim();
-  if (configured && CLOUD_MODEL_CATALOG.some((item) => item.id === configured)) return configured;
-  return DEFAULT_CLOUD_MODEL_ID;
+  return process.env.GROQ_API_KEY?.trim() || "";
 }
 
 export async function GET() {
   const key = getKey();
-  const model = getModel();
+  const model = DEFAULT_CLOUD_MODEL_ID;
   if (!key) {
     return Response.json({ ok: false, provider: "groq", configured: false, model, error: "GROQ_API_KEY is not configured." }, { status: 503 });
   }
