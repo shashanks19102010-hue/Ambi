@@ -1,4 +1,5 @@
 import { CLOUD_MODEL_CATALOG, DEFAULT_CLOUD_MODEL_ID, SYSTEM_PROMPT } from "@/lib/constants";
+import { checkRateLimit, rateLimitResponse } from "@/lib/security/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -60,8 +61,9 @@ async function callGroq(model: string, messages: ChatMessage[], stream: boolean,
           if (typeof parsed.error?.message === "string") detail = parsed.error.message;
         } catch { detail = raw.slice(0, 400); }
       }
-      const error = new Error(detail) as Error & { status?: number };
+      const error = new Error(detail) as Error & { status?: number; retryAfter?: string };
       error.status = response.status;
+      error.retryAfter = response.headers.get("retry-after") || undefined;
       throw error;
     }
     return { response };
@@ -81,6 +83,11 @@ function parseProviderLine(line: string, controller: ReadableStreamDefaultContro
   return false;
 }
 
+function providerHeaders(error: unknown) {
+  const retryAfter = (error as { retryAfter?: unknown }).retryAfter;
+  return typeof retryAfter === "string" && retryAfter ? { "Retry-After": retryAfter } : {};
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   if (url.searchParams.get("probe") !== "1") return Response.json({ ok: true, provider: "groq", configured: Boolean(key()), model: modelOf(undefined), visionModel: VISION_MODEL, models: CLOUD_MODEL_CATALOG }, { headers: { "Cache-Control": "no-store" } });
@@ -94,11 +101,13 @@ export async function GET(request: Request) {
     return Response.json({ ok: true, provider: "groq", model: selected, visionModel: VISION_MODEL, status: 200, latencyMs: Date.now() - started, reply: typeof text === "string" ? text : "" }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const status = typeof (error as { status?: unknown }).status === "number" ? Number((error as { status?: number }).status) : 502;
-    return Response.json({ ok: false, provider: "groq", configured: Boolean(key()), latencyMs: Date.now() - started, error: error instanceof Error ? error.message : "Groq probe failed." }, { status: status >= 500 ? 502 : status });
+    return Response.json({ ok: false, provider: "groq", configured: Boolean(key()), latencyMs: Date.now() - started, error: error instanceof Error ? error.message : "Groq probe failed." }, { status: status >= 500 ? 502 : status, headers: providerHeaders(error) });
   }
 }
 
 export async function POST(request: Request) {
+  const rate = checkRateLimit(request, { limit: 20, windowMs: 60_000 });
+  if (!rate.ok) return rateLimitResponse(rate.retryAfterSeconds);
   if (!key()) return Response.json({ error: "Groq API key is not configured on this deployment." }, { status: 503 });
   try {
     const body = await request.json() as { messages?: unknown; model?: unknown; imageDataUrl?: unknown };
@@ -149,6 +158,6 @@ export async function POST(request: Request) {
   } catch (error) {
     if (request.signal.aborted) return new Response(null, { status: 499 });
     const status = typeof (error as { status?: unknown }).status === "number" ? Number((error as { status?: number }).status) : 502;
-    return Response.json({ error: error instanceof Error ? error.message : "Groq request failed." }, { status: status >= 500 ? 502 : status });
+    return Response.json({ error: error instanceof Error ? error.message : "Groq request failed." }, { status: status >= 500 ? 502 : status, headers: providerHeaders(error) });
   }
 }
