@@ -45,19 +45,15 @@ export default function AmbiShell() {
     try {
       const response = await fetch("/api/health/groq", { cache: "no-store" });
       setHealth((h) => ({ ...h, inference: response.ok ? "ready" : "error", network: navigator.onLine ? "online" : "offline", safeMode: !response.ok, recovery: response.ok ? "idle" : "safe" }));
-    } catch {
-      setHealth((h) => ({ ...h, inference: "error", network: "offline", safeMode: true, recovery: "safe" }));
-    }
+    } catch { setHealth((h) => ({ ...h, inference: "error", network: "offline", safeMode: true, recovery: "safe" })); }
   }
 
   async function refreshResearchHealth() {
     try {
       const response = await fetch("/api/search?probe=1", { cache: "no-store" });
-      const data = await response.json().catch(() => ({})) as { ok?: boolean };
-      setHealth((h) => ({ ...h, webSearch: response.ok && data.ok ? "ready" : "disabled" }));
-    } catch {
-      setHealth((h) => ({ ...h, webSearch: "error" }));
-    }
+      const data = await response.json().catch(() => ({})) as { ok?: boolean; provider?: string; enabled?: boolean };
+      setHealth((h) => ({ ...h, webSearch: response.ok && data.enabled ? "ready" : "disabled" }));
+    } catch { setHealth((h) => ({ ...h, webSearch: "error" })); }
   }
 
   useEffect(() => {
@@ -84,13 +80,9 @@ export default function AmbiShell() {
     void memoryStore.saveActiveConversationId(activeId).catch(() => undefined);
     const root = document.documentElement;
     root.dataset.motion = settings.reducedMotion ? "reduced" : "full";
-    const applyTheme = () => {
-      const resolved = settings.theme === "system" ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : settings.theme;
-      root.dataset.theme = resolved;
-    };
+    const applyTheme = () => { const resolved = settings.theme === "system" ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : settings.theme; root.dataset.theme = resolved; };
     applyTheme();
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    media.addEventListener?.("change", applyTheme);
+    const media = window.matchMedia("(prefers-color-scheme: dark)"); media.addEventListener?.("change", applyTheme);
     return () => media.removeEventListener?.("change", applyTheme);
   }, [settings, activeId, hydrated]);
 
@@ -101,13 +93,14 @@ export default function AmbiShell() {
   function openSettings() { setMobileNavOpen(false); setSettingsOpen(true); }
   function stop() { controllerRef.current?.abort(); requestIdRef.current = null; setBusy(false); }
 
-  async function send(text: string) {
+  async function send(text: string, imageDataUrl?: string) {
     const clean = text.trim(); if (!clean || busy) return;
     const decision = checkUserMessage(clean); const chatId = activeId ?? uid("chat"); const current = conversations.find((c) => c.id === chatId) ?? { ...newConversation(), id: chatId, title: titleFor(clean) };
+    const userMedia = imageDataUrl ? { type: "image" as const, dataUrl: imageDataUrl, alt: "User attached image" } : undefined;
     if (!decision.allowed) { const blocked: Message = { id: uid("msg"), role: "assistant", content: decision.reason ?? "I can't help with that request.", createdAt: Date.now(), status: "complete", source: "local" }; const next = { ...current, title: current.messages.length ? current.title : titleFor(clean), messages: [...current.messages, blocked], updatedAt: Date.now() }; setConversations((items) => items.some((c) => c.id === chatId) ? items.map((c) => c.id === chatId ? next : c) : [next, ...items]); setActiveId(chatId); return; }
-    if (!navigator.onLine) { const user: Message = { id: uid("msg"), role: "user", content: clean, createdAt: Date.now(), status: "complete" }; const error: Message = { id: uid("msg"), role: "assistant", content: "Ambi needs an internet connection for Groq AI. Reconnect and try again.", createdAt: Date.now(), status: "error", source: "cloud" }; const next = { ...current, title: current.messages.length ? current.title : titleFor(clean), messages: [...current.messages, user, error] }; setConversations((items) => items.some((c) => c.id === chatId) ? items.map((c) => c.id === chatId ? next : c) : [next, ...items]); setActiveId(chatId); return; }
+    if (!navigator.onLine) { const user: Message = { id: uid("msg"), role: "user", content: clean, createdAt: Date.now(), status: "complete", media: userMedia }; const error: Message = { id: uid("msg"), role: "assistant", content: "Ambi needs an internet connection for Groq AI. Reconnect and try again.", createdAt: Date.now(), status: "error", source: "cloud" }; const next = { ...current, title: current.messages.length ? current.title : titleFor(clean), messages: [...current.messages, user, error] }; setConversations((items) => items.some((c) => c.id === chatId) ? items.map((c) => c.id === chatId ? next : c) : [next, ...items]); setActiveId(chatId); return; }
 
-    const user: Message = { id: uid("msg"), role: "user", content: clean, createdAt: Date.now(), status: "complete" };
+    const user: Message = { id: uid("msg"), role: "user", content: clean, createdAt: Date.now(), status: "complete", media: userMedia };
     const conversationWithUser: Conversation = { ...current, title: current.messages.length ? current.title : titleFor(clean), messages: [...current.messages, user], updatedAt: Date.now() };
     setConversations((items) => items.some((c) => c.id === chatId) ? items.map((c) => c.id === chatId ? conversationWithUser : c) : [conversationWithUser, ...items]); setActiveId(chatId); setBusy(true); setHealth((h) => ({ ...h, inference: "loading", safeMode: false, recovery: "idle" }));
 
@@ -120,7 +113,7 @@ export default function AmbiShell() {
       if (settings.webSearch && wantsWebSearch(clean)) {
         const result = await runOptionalTool("web_search", clean);
         if (result.ok) { citations = result.citations ?? []; toolText = `[Untrusted web research]\n${result.text}`; setHealth((h) => ({ ...h, webSearch: "ready" })); }
-        else setHealth((h) => ({ ...h, webSearch: "error" }));
+        else { setHealth((h) => ({ ...h, webSearch: "error" })); toolText = `[Web research unavailable]\n${result.text}`; }
       }
       const enriched: Conversation = toolText ? { ...conversationWithUser, messages: [...conversationWithUser.messages, { id: uid("tool"), role: "tool", content: toolText, createdAt: Date.now(), status: "complete", source: "web" }] } : conversationWithUser;
       const memories = settings.memoryEnabled && !settings.temporaryChat ? await memoryStore.loadMemories() : [];
@@ -128,7 +121,7 @@ export default function AmbiShell() {
       const styleInstruction = settings.responseStyle === "concise" ? "Keep answers concise and focused." : settings.responseStyle === "detailed" ? "Give a detailed, well-structured explanation." : settings.responseStyle === "expert" ? "Give technically rigorous, expert-level answers." : "Use a clear, balanced level of detail.";
       const modelMessages = buildContext(enriched, `${SYSTEM_PROMPT}\n${languageInstruction}\n${styleInstruction}`, memories);
       let output = "";
-      await streamCloudChat({ messages: modelMessages, model: settings.model, signal: controller.signal, onDelta: (delta) => { if (requestIdRef.current !== requestId) return; output += delta; setConversations((items) => items.map((c) => c.id === chatId ? { ...c, messages: c.messages.map((m) => m.id === responseId ? { ...m, content: redactSecrets(output), citations } : m) } : c)); } });
+      await streamCloudChat({ messages: modelMessages, model: settings.model, signal: controller.signal, imageDataUrl, onDelta: (delta) => { if (requestIdRef.current !== requestId) return; output += delta; setConversations((items) => items.map((c) => c.id === chatId ? { ...c, messages: c.messages.map((m) => m.id === responseId ? { ...m, content: redactSecrets(output), citations } : m) } : c)); } });
       if (requestIdRef.current !== requestId) return;
       const final = redactSecrets(output.trim()); if (!final) throw new CloudInferenceError("Groq returned no text. Please try again.", "EMPTY_RESPONSE");
       setConversations((items) => items.map((c) => c.id === chatId ? { ...c, messages: c.messages.map((m) => m.id === responseId ? { ...m, content: final, status: "complete", source: "cloud", citations } : m), updatedAt: Date.now() } : c)); setHealth((h) => ({ ...h, inference: "ready", safeMode: false, recovery: "idle", network: "online" }));
