@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import "./ambi-calm.css";
 import PWARegister from "@/components/PWARegister";
 
 export const metadata: Metadata = {
@@ -11,7 +12,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#f4f1ea",
+  themeColor: "#f5f3ed",
   colorScheme: "light dark",
   viewportFit: "cover",
 };
