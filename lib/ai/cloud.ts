@@ -5,7 +5,48 @@ export class CloudInferenceError extends Error {
 }
 
 type Event = { type: "delta"; text: string } | { type: "done" } | { type: "error"; message: string; code?: string };
-function processEvent(event: Event, onDelta: (text: string) => void) { if (event.type === "delta" && event.text) onDelta(event.text); if (event.type === "error") throw new CloudInferenceError(event.message, event.code || "REMOTE"); return event.type === "done"; }
+function processEvent(event: Event, onDelta: (text: string) => void) {
+  if (event.type === "delta" && event.text) onDelta(event.text);
+  if (event.type === "error") throw new CloudInferenceError(event.message, event.code || "REMOTE");
+  return event.type === "done";
+}
+
+const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
+const MAX_ATTEMPTS = 3;
+
+function sleep(ms: number, signal?: AbortSignal) {
+  if (signal?.aborted) return Promise.reject(new CloudInferenceError("Generation stopped.", "ABORTED"));
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener("abort", () => { clearTimeout(timer); reject(new CloudInferenceError("Generation stopped.", "ABORTED")); }, { once: true });
+  });
+}
+
+async function requestWithRetry(body: string, signal?: AbortSignal): Promise<Response> {
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    if (signal?.aborted) throw new CloudInferenceError("Generation stopped.", "ABORTED");
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+        cache: "no-store",
+        body,
+        signal,
+      });
+      if (response.ok || !RETRYABLE_STATUS.has(response.status) || attempt === MAX_ATTEMPTS) return response;
+      const retryAfter = Number(response.headers.get("Retry-After"));
+      const delay = Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(retryAfter * 1000, 5000) : 500 * 2 ** (attempt - 1);
+      await sleep(delay, signal);
+    } catch (error) {
+      if (signal?.aborted) throw new CloudInferenceError("Generation stopped.", "ABORTED");
+      lastError = error;
+      if (attempt === MAX_ATTEMPTS) break;
+      await sleep(400 * 2 ** (attempt - 1), signal);
+    }
+  }
+  throw new CloudInferenceError(lastError instanceof Error ? lastError.message : "Network request failed after automatic retries.", "NETWORK");
+}
 
 export async function streamCloudChat({ messages, model, signal, onDelta, imageDataUrl }: { messages: Message[]; model: string; signal?: AbortSignal; onDelta: (text: string) => void; imageDataUrl?: string }) {
   if (signal?.aborted) throw new CloudInferenceError("Generation stopped.", "ABORTED");
@@ -14,17 +55,12 @@ export async function streamCloudChat({ messages, model, signal, onDelta, imageD
     try { attachedImage = sessionStorage.getItem("ambi:vision-image") || undefined; sessionStorage.removeItem("ambi:vision-image"); } catch { attachedImage = undefined; }
   }
 
-  let response: Response;
-  try {
-    response = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json", Accept: "text/event-stream" }, cache: "no-store", body: JSON.stringify({ model, messages, imageDataUrl: attachedImage }), signal });
-  } catch (error) {
-    if (signal?.aborted) throw new CloudInferenceError("Generation stopped.", "ABORTED");
-    throw new CloudInferenceError(error instanceof Error ? error.message : "Network request failed.", "NETWORK");
-  }
+  const response = await requestWithRetry(JSON.stringify({ model, messages, imageDataUrl: attachedImage }), signal);
   if (!response.ok) {
     let detail = `AI request failed (${response.status}).`;
     try { const body = await response.json() as { error?: string; message?: string }; detail = body.error || body.message || detail; } catch { /* keep status */ }
-    throw new CloudInferenceError(detail, response.status === 401 || response.status === 403 ? "AUTH" : response.status === 429 ? "RATE_LIMIT" : "REMOTE");
+    const code = response.status === 401 || response.status === 403 ? "AUTH" : response.status === 429 ? "RATE_LIMIT" : response.status >= 500 ? "REMOTE_RETRY_EXHAUSTED" : "REMOTE";
+    throw new CloudInferenceError(detail, code);
   }
   if (!response.body) throw new CloudInferenceError("AI returned an empty stream.", "EMPTY_STREAM");
 
@@ -48,4 +84,6 @@ export async function streamCloudChat({ messages, model, signal, onDelta, imageD
     if (error instanceof CloudInferenceError) throw error;
     throw new CloudInferenceError(error instanceof Error ? error.message : "Stream failed.", "STREAM");
   } finally { reader.releaseLock(); }
+
+  if (!completed) throw new CloudInferenceError("The AI stream ended before completion. Please retry once.", "INCOMPLETE_STREAM");
 }
