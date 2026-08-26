@@ -34,18 +34,27 @@ function renderBlock(block: string, keyPrefix: string) {
   }
   flushNormal(); return nodes;
 }
+function chunkForSpeech(text: string, size = 2600) {
+  const chunks: string[] = []; let remaining = text.trim();
+  while (remaining.length > size) { let cut = remaining.lastIndexOf(" ", size); if (cut < size * 0.65) cut = size; chunks.push(remaining.slice(0, cut)); remaining = remaining.slice(cut).trimStart(); }
+  if (remaining) chunks.push(remaining);
+  return chunks;
+}
 
 export default function MessageBubble({ message }: { message: Message }) {
   const [copied, setCopied] = useState(false); const [speaking, setSpeaking] = useState(false);
   const parts = message.content.split(/(```[\s\S]*?```)/g);
   const source = message.source === "cloud" ? "GROQ AI" : message.source === "web" ? "WEB RESEARCH" : message.source === "local" ? "LOCAL" : null;
   async function copy(text: string) { try { await navigator.clipboard.writeText(text); setCopied(true); window.setTimeout(() => setCopied(false), 1400); } catch { setCopied(false); } }
-  async function readAloud() {
-    if (speaking) { window.speechSynthesis?.cancel(); setSpeaking(false); return; }
+  function readAloud() {
     if (!("speechSynthesis" in window)) return;
-    const utterance = new SpeechSynthesisUtterance(message.content);
-    utterance.onend = () => setSpeaking(false); utterance.onerror = () => setSpeaking(false);
-    setSpeaking(true); window.speechSynthesis.cancel(); window.speechSynthesis.speak(utterance);
+    if (speaking) { window.speechSynthesis.cancel(); setSpeaking(false); return; }
+    window.speechSynthesis.cancel();
+    const chunks = chunkForSpeech(message.content);
+    if (!chunks.length) return;
+    let index = 0; setSpeaking(true);
+    const speakNext = () => { if (index >= chunks.length) { setSpeaking(false); return; } const utterance = new SpeechSynthesisUtterance(chunks[index++]); utterance.onend = speakNext; utterance.onerror = () => setSpeaking(false); window.speechSynthesis.speak(utterance); };
+    speakNext();
   }
 
   return <article className={`message ${message.role}`}>
@@ -53,11 +62,10 @@ export default function MessageBubble({ message }: { message: Message }) {
     <div className="message-body"><div className="meta"><span>{message.role === "user" ? "You" : "Ambi"}</span>{source && <span className="source">{source}</span>}{message.status === "streaming" && !message.generation && <span className="streaming"><span/><span/><span/></span>}</div>
       {message.media?.type === "image" && <div className={`message-media-card ${message.role === "user" ? "attached-image-card" : "generated-image-card"}`}><img src={message.media.dataUrl} alt={message.media.alt} loading="lazy"/><div className="generated-image-actions"><button type="button" onClick={() => void copy(message.media?.type === "image" ? message.media.dataUrl : "")}>{copied ? "Copied" : "Copy"}</button>{message.role === "assistant" && <a href={message.media.dataUrl} download="ambi-image.png">Save image</a>}</div></div>}
       {message.media?.type === "video" && <div className="generated-video-card"><video controls playsInline preload="metadata" src={message.media.url} aria-label={message.media.alt}/><div className="generated-image-actions"><a href={message.media.url} target="_blank" rel="noreferrer">Open video</a></div></div>}
-      {message.media?.type === "audio" && <div className="generated-audio-card"><div className="audio-card-icon">◉</div><div className="audio-card-copy"><strong>Ambi audio</strong><span>{message.media.alt}</span><audio controls preload="metadata" src={message.media.url}>Your browser does not support audio playback.</audio></div></div>}
-      {message.generation?.type === "image" && message.status === "streaming" && <div className="image-generation-card"><div className="image-generation-art"><div className="generation-orb"/><div className="generation-grid"/></div><div><strong>{message.generation.phase === "preparing" ? "Preparing image" : message.generation.phase === "creating" ? "Creating image" : "Finishing image"}</strong><span>{message.generation.phase === "preparing" ? "Turning your request into a visual prompt…" : message.generation.phase === "creating" ? "Generating the artwork…" : "Almost ready…"}</span></div></div>}
+      {message.generation && message.status === "streaming" && <div className="image-generation-card"><div className="image-generation-art"><div className="generation-orb"/><div className="generation-grid"/></div><div><strong>{message.generation.phase === "preparing" ? `Preparing ${message.generation.type}` : message.generation.phase === "creating" ? `Creating ${message.generation.type}` : `Finishing ${message.generation.type}`}</strong><span>{message.generation.phase === "preparing" ? "Understanding your request and setting up the generation…" : message.generation.phase === "creating" ? `Generating with ${message.generation.model ?? "Puter.js"}…` : "Almost ready…"}</span></div></div>}
       {parts.map((part, i) => part.startsWith("```") ? <div className="code-wrap" key={i}><pre className="code"><code>{part.replace(/^```[\w-]*\n?/, "").replace(/```$/, "")}</code></pre><button className="code-copy" onClick={() => void copy(part.replace(/^```[\w-]*\n?/, "").replace(/```$/, ""))} type="button">Copy code</button></div> : part.trim() ? <div className={message.role === "user" ? "bubble user-bubble" : "bubble"} key={i}>{renderBlock(part, String(i))}</div> : null)}
       {message.citations?.length ? <div className="sources"><div className="sources-title">Sources</div>{message.citations.slice(0, 6).map((citation, i) => <a className="source-link" key={`${citation.url}-${i}`} href={citation.url} target="_blank" rel="noreferrer"><span>[{i + 1}]</span><span>{citation.title}</span></a>)}</div> : null}
-      {message.role === "assistant" && message.status !== "streaming" && !message.media && <div className="message-actions"><button onClick={() => void copy(message.content)} type="button">{copied ? "Copied" : "Copy"}</button><button onClick={() => void readAloud()} type="button">{speaking ? "Stop voice" : "Read aloud"}</button><button onClick={() => { if (typeof navigator !== "undefined" && "share" in navigator && navigator.share) void navigator.share({ text: message.content }).catch(() => undefined); }} type="button">Share</button></div>}
+      {message.role === "assistant" && message.status !== "streaming" && <div className="message-actions"><button onClick={() => void copy(message.content)} type="button">{copied ? "Copied" : "Copy"}</button><button onClick={readAloud} type="button">{speaking ? "Stop voice" : "Read aloud"}</button><button onClick={() => { if (typeof navigator !== "undefined" && "share" in navigator && navigator.share) void navigator.share({ text: message.content }).catch(() => undefined); }} type="button">Share</button></div>}
     </div>
   </article>;
 }
