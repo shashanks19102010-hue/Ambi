@@ -1,12 +1,29 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import type { AppSettings } from "@/types/chat";
+import { PUTER_IMAGE_MODELS, PUTER_VIDEO_MODELS } from "@/lib/media/puter-models";
 
 type SpeechRecognitionLike = { lang: string; continuous: boolean; interimResults: boolean; start: () => void; stop: () => void; onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null; onend: (() => void) | null; onerror: ((event: { error?: string }) => void) | null };
 type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
 type SpeechWindow = Window & { SpeechRecognition?: SpeechRecognitionCtor; webkitSpeechRecognition?: SpeechRecognitionCtor };
-type MediaMode = "chat" | "image" | "video" | "audio";
+type MediaMode = "chat" | "image" | "video";
 
-export default function Composer({ onSend, onStop, busy, webSearch, onToggleResearch }: { onSend: (text: string, imageDataUrl?: string) => void; onStop: () => void; busy: boolean; webSearch: boolean; onToggleResearch: () => void }) {
+function mediaIntent(text: string): MediaMode {
+  const normalized = text.trim().toLowerCase();
+  if (/\b(generate|create|make|draw|design)\b.{0,24}\b(an?\s*)?(image|picture|photo|illustration)\b/.test(normalized) || /^(image|picture|photo)\s*[:,-]/.test(normalized)) return "image";
+  if (/\b(generate|create|make|produce|animate)\b.{0,24}\b(a\s*)?(video|clip|movie|animation)\b/.test(normalized) || /^(video|clip|animation)\s*[:,-]/.test(normalized)) return "video";
+  return "chat";
+}
+
+function mediaPrompt(text: string, mode: "image" | "video") {
+  const normalized = text.trim();
+  const pattern = mode === "image"
+    ? /^(?:please\s+)?(?:generate|create|make|draw|design)\s+(?:an?\s+)?(?:image|picture|photo|illustration)\s*(?:of|showing|depicting|with)?\s*/i
+    : /^(?:please\s+)?(?:generate|create|make|produce|animate)\s+(?:a\s+)?(?:video|clip|movie|animation)\s*(?:of|showing|depicting|with)?\s*/i;
+  return normalized.replace(pattern, "").trim() || normalized;
+}
+
+export default function Composer({ onSend, onStop, busy, webSearch, onToggleResearch, imageModel, videoModel }: { onSend: (text: string, imageDataUrl?: string) => void; onStop: () => void; busy: boolean; webSearch: boolean; onToggleResearch: () => void; imageModel: string; videoModel: string }) {
   const [value, setValue] = useState("");
   const [listening, setListening] = useState(false);
   const [voiceError, setVoiceError] = useState("");
@@ -20,17 +37,17 @@ export default function Composer({ onSend, onStop, busy, webSearch, onToggleRese
 
   useEffect(() => {
     const start = () => setMediaBusy(true); const end = () => setMediaBusy(false);
-    ["image", "video", "audio"].forEach((kind) => { window.addEventListener(`ambi:${kind}-start`, start); window.addEventListener(`ambi:${kind}-end`, end); });
-    return () => { recognitionRef.current?.stop(); ["image", "video", "audio"].forEach((kind) => { window.removeEventListener(`ambi:${kind}-start`, start); window.removeEventListener(`ambi:${kind}-end`, end); }); };
+    ["image", "video"].forEach((kind) => { window.addEventListener(`ambi:${kind}-start`, start); window.addEventListener(`ambi:${kind}-end`, end); });
+    return () => { recognitionRef.current?.stop(); ["image", "video"].forEach((kind) => { window.removeEventListener(`ambi:${kind}-start`, start); window.removeEventListener(`ambi:${kind}-end`, end); }); };
   }, []);
   function resize() { const el = inputRef.current; if (!el) return; el.style.height = "0px"; el.style.height = `${Math.min(el.scrollHeight, 180)}px`; }
   function submit() {
     const text = value.trim(); if (!text || busy || mediaBusy) return;
-    if (mediaMode === "image") window.dispatchEvent(new CustomEvent("ambi:generate-image", { detail: { prompt: text } }));
-    else if (mediaMode === "video") window.dispatchEvent(new CustomEvent("ambi:generate-video", { detail: { prompt: text } }));
-    else if (mediaMode === "audio") window.dispatchEvent(new CustomEvent("ambi:generate-audio", { detail: { prompt: text } }));
+    const detected = mediaMode === "chat" ? mediaIntent(text) : mediaMode;
+    const effective = detected === "chat" ? "chat" : detected;
+    if (effective === "image") window.dispatchEvent(new CustomEvent("ambi:generate-image", { detail: { prompt: mediaPrompt(text, "image"), model: imageModel } }));
+    else if (effective === "video") window.dispatchEvent(new CustomEvent("ambi:generate-video", { detail: { prompt: mediaPrompt(text, "video"), model: videoModel } }));
     else {
-      if (imageDataUrl) { try { sessionStorage.setItem("ambi:vision-image", imageDataUrl); } catch { /* continue without the cache */ } }
       onSend(text, imageDataUrl || undefined);
     }
     setValue(""); setImageDataUrl(""); setImageName(""); setMediaMode("chat"); requestAnimationFrame(resize);
@@ -53,8 +70,11 @@ export default function Composer({ onSend, onStop, busy, webSearch, onToggleRese
     recognitionRef.current = recognition; setListening(true); try { recognition.start(); } catch { setListening(false); recognitionRef.current = null; setVoiceError("Voice input could not start. Try again."); }
   }
   const disabled = !value.trim() || busy || mediaBusy;
-  const placeholder = mediaMode === "image" ? "Describe the image…" : mediaMode === "video" ? "Describe the video…" : mediaMode === "audio" ? "Describe the voice or audio…" : busy ? "Ambi is responding…" : "Message Ambi…";
-  const label = mediaMode === "image" ? "Image generation · Pixazo Flux" : mediaMode === "video" ? "Video generation · Pixazo LTX" : "Audio generation · Pixazo Chatterbox";
+  const placeholder = mediaMode === "image" ? "Describe the image…" : mediaMode === "video" ? "Describe the video…" : busy ? "Ambi is responding…" : "Message Ambi…";
+  const activeImage = PUTER_IMAGE_MODELS.find((m) => m.id === imageModel) ?? PUTER_IMAGE_MODELS[0];
+  const activeVideo = PUTER_VIDEO_MODELS.find((m) => m.id === videoModel) ?? PUTER_VIDEO_MODELS[0];
+  const label = mediaMode === "image" ? `Image generation · ${activeImage.name}` : mediaMode === "video" ? `Video generation · ${activeVideo.name}` : "";
+
   return <div className="composer-wrap"><div className={`composer ${mediaMode !== "chat" ? "composer-image-mode" : ""}`}>
     {mediaMode !== "chat" && <div className="composer-mode-label"><span className="image-mode-dot"/> {label}</div>}
     {imageDataUrl && <div className="attachment-chip"><img src={imageDataUrl} alt="Attached image preview"/><span>{imageName || "Image attached"}</span><button type="button" aria-label="Remove attached image" onClick={() => { setImageDataUrl(""); setImageName(""); }}>×</button></div>}
@@ -66,8 +86,7 @@ export default function Composer({ onSend, onStop, busy, webSearch, onToggleRese
       <button className="tool" onClick={() => fileRef.current?.click()} type="button">⌕ Attach</button>
       <button className={`tool ${mediaMode === "image" ? "active" : ""}`} onClick={() => setMediaMode((m) => m === "image" ? "chat" : "image")} type="button" aria-pressed={mediaMode === "image"}>✦ Image</button>
       <button className={`tool ${mediaMode === "video" ? "active" : ""}`} onClick={() => setMediaMode((m) => m === "video" ? "chat" : "video")} type="button" aria-pressed={mediaMode === "video"}>▹ Video</button>
-      <button className={`tool ${mediaMode === "audio" ? "active" : ""}`} onClick={() => setMediaMode((m) => m === "audio" ? "chat" : "audio")} type="button" aria-pressed={mediaMode === "audio"}>◌ Audio</button>
-    </div><span className="hint">{mediaMode === "image" ? "Pixazo · Flux" : mediaMode === "video" ? "Pixazo · LTX" : mediaMode === "audio" ? "Pixazo · Chatterbox" : imageDataUrl ? "Groq Vision · Qwen 3.6 27B" : "Groq AI · Shift+Enter for a new line"}</span>{busy ? <button className="send stop" onClick={onStop} type="button">Stop</button> : <button className="send" onClick={submit} type="button" disabled={disabled}>{mediaMode === "image" || mediaMode === "audio" ? "Generate" : mediaMode === "video" ? "Create" : "Send"}</button>}</div>
+    </div><span className="hint">{mediaMode === "image" ? activeImage.provider : mediaMode === "video" ? activeVideo.provider : imageDataUrl ? "Attached image will be shown in your message" : "Shift+Enter for a new line"}</span>{busy ? <button className="send stop" onClick={onStop} type="button">Stop</button> : <button className="send" onClick={submit} type="button" disabled={disabled}>{mediaMode === "image" || mediaMode === "video" ? "Generate" : "Send"}</button>}</div>
     {voiceError && <div className="composer-error" role="status">{voiceError}</div>}
   </div></div>;
 }
