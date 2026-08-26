@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { checkRateLimit, rateLimitResponse } from "@/lib/security/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -18,44 +19,29 @@ function ddgResults(data: { AbstractText?: string; AbstractURL?: string; Heading
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const query = url.searchParams.get("q")?.trim() ?? "";
   const probe = url.searchParams.get("probe") === "1";
+  const enabled = process.env.AMBI_WEB_SEARCH_ENABLED === "1";
+  const tavilyConfigured = enabled && Boolean(process.env.TAVILY_API_KEY?.trim());
 
-  if (probe) {
-    const tavily = process.env.AMBI_WEB_SEARCH_ENABLED === "1" && Boolean(process.env.TAVILY_API_KEY);
-    return NextResponse.json({ ok: true, provider: tavily ? "tavily" : "duckduckgo", configured: true, fallback: !tavily }, { headers: { "Cache-Control": "no-store" } });
-  }
+  if (probe) return NextResponse.json({ ok: true, enabled, provider: tavilyConfigured ? "tavily" : enabled ? "duckduckgo" : "disabled", configured: enabled }, { headers: { "Cache-Control": "no-store" } });
+  if (!enabled) return NextResponse.json({ results: [], disabled: true }, { status: 503, headers: { "Cache-Control": "no-store" } });
 
+  const rate = checkRateLimit(request, { limit: 20, windowMs: 60_000 });
+  if (!rate.ok) return rateLimitResponse(rate.retryAfterSeconds);
+  const query = url.searchParams.get("q")?.trim() ?? "";
   if (!query || query.length > 300) return NextResponse.json({ results: [], error: "A valid research query is required." }, { status: 400 });
 
-  if (process.env.AMBI_WEB_SEARCH_ENABLED === "1" && process.env.TAVILY_API_KEY) {
+  if (tavilyConfigured) {
     try {
-      const result = await fetch("https://api.tavily.com/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Ambi-Request": "research" },
-        body: JSON.stringify({ api_key: process.env.TAVILY_API_KEY, query, max_results: 6, search_depth: "basic", include_answer: false }),
-        cache: "no-store",
-        signal: AbortSignal.timeout(8000),
-      });
-      if (result.ok) {
-        const data = await result.json();
-        return NextResponse.json(data, { headers: { "Cache-Control": "no-store" } });
-      }
-    } catch {
-      // Fall through to the no-key fallback.
-    }
+      const result = await fetch("https://api.tavily.com/search", { method: "POST", headers: { "Content-Type": "application/json", "X-Ambi-Request": "research" }, body: JSON.stringify({ api_key: process.env.TAVILY_API_KEY!.trim(), query, max_results: 6, search_depth: "basic", include_answer: false }), cache: "no-store", signal: AbortSignal.timeout(8000) });
+      if (result.ok) return NextResponse.json(await result.json(), { headers: { "Cache-Control": "no-store" } });
+    } catch { /* Explicitly enabled research may use the documented fallback. */ }
   }
 
   try {
-    const fallback = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`, {
-      cache: "no-store",
-      signal: AbortSignal.timeout(8000),
-      headers: { Accept: "application/json" },
-    });
+    const fallback = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`, { cache: "no-store", signal: AbortSignal.timeout(8000), headers: { Accept: "application/json" } });
     if (!fallback.ok) return NextResponse.json({ results: [], disabled: false }, { status: 502 });
     const data = await fallback.json() as Parameters<typeof ddgResults>[0];
     return NextResponse.json({ results: ddgResults(data), provider: "duckduckgo" }, { headers: { "Cache-Control": "no-store" } });
-  } catch {
-    return NextResponse.json({ results: [], disabled: false }, { status: 504 });
-  }
+  } catch { return NextResponse.json({ results: [], disabled: false }, { status: 504 }); }
 }

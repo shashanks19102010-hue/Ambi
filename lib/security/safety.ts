@@ -1,24 +1,22 @@
 import { MAX_MESSAGE_LENGTH, SENSITIVE_PATTERNS } from "@/lib/constants";
 
 export interface SafetyDecision { allowed: boolean; reason?: string; risk: "low" | "medium" | "high"; }
+export interface ExternalContentScan { sanitized: string; warnings: string[]; hadInstructionLikeText: boolean; }
 
-export interface ExternalContentScan {
-  sanitized: string;
-  warnings: string[];
-  hadInstructionLikeText: boolean;
-}
-
+// Defense-in-depth only. These patterns cover a small set of obvious high-risk
+// categories and common prompt-injection strings; they do NOT provide complete
+// safety classification, intent understanding, malware detection, or policy enforcement.
 const dangerousPatterns = [
   /\b(?:build|make|assemble)\b.*\b(?:bomb|explosive|weapon)\b/i,
   /\b(?:malware|ransomware|keylogger|credential\s*stealer)\b/i,
-  /\b(?:bypass|disable|evade)\b.*\b(?:security|antivirus|parental control)\b/i
+  /\b(?:bypass|disable|evade)\b.*\b(?:security|antivirus|parental control)\b/i,
 ];
 const injectionPatterns = [
   /ignore\s+(all\s+)?previous\s+instructions/i,
   /system\s+message\s*:/i,
   /reveal\s+(the\s+)?(system|developer)\s+prompt/i,
   /show\s+(me\s+)?(?:secrets|credentials|api\s*keys)/i,
-  /disable\s+(safety|security)/i
+  /disable\s+(safety|security)/i,
 ];
 const externalInstructionPattern = /\b(ignore|override|follow these instructions|system message|developer message|act as system)\b/gi;
 
@@ -35,9 +33,7 @@ export function scanExternalContent(input: string): ExternalContentScan {
   const raw = input.replaceAll("\u0000", "").slice(0, 5000);
   const warnings: string[] = [];
   let sanitized = raw;
-  if (/<script[\s\S]*?<\/script>/i.test(sanitized) || /<style[\s\S]*?<\/style>/i.test(sanitized)) {
-    warnings.push("Active script or style markup was removed from external content.");
-  }
+  if (/<script[\s\S]*?<\/script>/i.test(sanitized) || /<style[\s\S]*?<\/style>/i.test(sanitized)) warnings.push("Active script or style markup was removed from external content.");
   sanitized = sanitized.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ");
   const matches = sanitized.match(externalInstructionPattern) ?? [];
   if (matches.length > 0) warnings.push("Instruction-like text was detected in an external source and treated as untrusted data.");
@@ -45,12 +41,5 @@ export function scanExternalContent(input: string): ExternalContentScan {
   return { sanitized, warnings: [...new Set(warnings)], hadInstructionLikeText: matches.length > 0 };
 }
 
-export function sanitizeExternalText(input: string): string {
-  return scanExternalContent(input).sanitized;
-}
-
-export function redactSecrets(input: string): string {
-  let value = input;
-  for (const pattern of SENSITIVE_PATTERNS) value = value.replace(pattern, "[REDACTED]");
-  return value;
-}
+export function sanitizeExternalText(input: string): string { return scanExternalContent(input).sanitized; }
+export function redactSecrets(input: string): string { let value = input; for (const pattern of SENSITIVE_PATTERNS) value = value.replace(pattern, "[REDACTED]"); return value; }
