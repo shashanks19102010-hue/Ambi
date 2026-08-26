@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@heyputer/puter.js": "latest",
+    "@heyputer/puter.js": "2.6.2",
     "@huggingface/transformers": "3.8.1",
     "@mlc-ai/web-llm": "0.2.84",
     "ai": "7.0.74",
