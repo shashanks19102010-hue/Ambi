@@ -3,7 +3,6 @@ import "./globals.css";
 import "./ambi-overrides.css";
 import "./theme-fix.css";
 import PWARegister from "@/components/PWARegister";
-import ThemeBridge from "@/components/ThemeBridge";
 
 export const metadata: Metadata = {
   title: "Ambi — Calm AI Workspace",
@@ -20,5 +19,5 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body><ThemeBridge />{children}<PWARegister /></body></html>;
+  return <html lang="en"><body>{children}<PWARegister /></body></html>;
 }
