@@ -84,7 +84,7 @@ function parseProviderLine(line: string, controller: ReadableStreamDefaultContro
   return false;
 }
 
-function providerHeaders(error: unknown): HeadersInit {
+function providerHeaders(error: unknown): Record<string, string> {
   const retryAfter = (error as { retryAfter?: unknown }).retryAfter;
   return typeof retryAfter === "string" && retryAfter ? { "Retry-After": retryAfter } : {};
 }
@@ -122,7 +122,8 @@ export async function POST(request: Request) {
       let lastUser = -1;
       for (let index = messages.length - 1; index >= 0; index -= 1) { if (messages[index].role === "user") { lastUser = index; break; } }
       if (lastUser >= 0) {
-        const original = typeof messages[lastUser].content === "string" ? messages[lastUser].content : "Please analyze the attached image.";
+        const lastContent = messages[lastUser].content;
+        const original: string = typeof lastContent === "string" ? lastContent : "Please analyze the attached image.";
         messages[lastUser] = { role: "user", content: [{ type: "text", text: original }, { type: "image_url", image_url: { url: imageDataUrl } }] };
       }
     }
