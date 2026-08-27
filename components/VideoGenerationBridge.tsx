@@ -50,16 +50,16 @@ export default function VideoGenerationBridge() {
         const active = conversations.find((conversation) => conversation.id === activeId) ?? conversations.find((conversation) => !conversation.archived) ?? newConversation(prompt.slice(0, 48));
         const videoMessageId = uid("msg");
         const placeholder: Message = { id: videoMessageId, role: "assistant", content: "", createdAt: Date.now(), status: "streaming", source: "cloud", generation: { type: "video", phase: "preparing", model: selectedModel } };
-        const seeded = { ...active, title: active.messages.length ? active.title : prompt.slice(0, 48), messages: [...active.messages, placeholder], updatedAt: Date.now() };
-        const next = conversations.some((conversation) => conversation.id === active.id) ? conversations.map((conversation) => conversation.id === active.id ? seeded : conversation) : [seeded, ...conversations];
+        const seeded: Conversation = { ...active, title: active.messages.length ? active.title : prompt.slice(0, 48), messages: [...active.messages, placeholder], updatedAt: Date.now() };
+        const next: Conversation[] = conversations.some((conversation) => conversation.id === active.id) ? conversations.map((conversation) => conversation.id === active.id ? seeded : conversation) : [seeded, ...conversations];
         await memoryStore.saveConversations(next); await memoryStore.saveActiveConversationId(active.id); window.dispatchEvent(new Event("ambi:conversation-sync"));
         await sleep(450); setPhase("creating");
-        const creating = next.map((conversation) => conversation.id === active.id ? { ...conversation, messages: conversation.messages.map((message) => message.id === videoMessageId ? { ...message, generation: { type: "video", phase: "creating", model: selectedModel } } : message) } : conversation);
+        const creating: Conversation[] = next.map((conversation) => conversation.id === active.id ? { ...conversation, messages: conversation.messages.map((message) => message.id === videoMessageId ? { ...message, generation: { type: "video", phase: "creating", model: selectedModel } } : message) } : conversation);
         await memoryStore.saveConversations(creating); window.dispatchEvent(new Event("ambi:conversation-sync"));
 
         const result = await runVideo(prompt, selectedModel);
         setPhase("finishing");
-        const finished = creating.map((conversation) => conversation.id === active.id ? { ...conversation, messages: conversation.messages.map((message) => message.id === videoMessageId ? { ...message, content: "Created video", status: "complete", media: { type: "video", url: result.src, alt: prompt }, generation: undefined } : message), updatedAt: Date.now() } : conversation);
+        const finished: Conversation[] = creating.map((conversation) => conversation.id === active.id ? { ...conversation, messages: conversation.messages.map((message) => message.id === videoMessageId ? { ...message, content: "Created video", status: "complete", media: { type: "video", url: result.src, alt: prompt }, generation: undefined } : message), updatedAt: Date.now() } : conversation);
         await memoryStore.saveConversations(finished); window.dispatchEvent(new Event("ambi:conversation-sync"));
         await sleep(400);
       } catch (generationError) {
@@ -68,7 +68,7 @@ export default function VideoGenerationBridge() {
         try {
           const conversations = await memoryStore.loadConversations();
           const activeId = await memoryStore.loadActiveConversationId();
-          const updated = conversations.map((conversation) => activeId && conversation.id === activeId ? { ...conversation, messages: conversation.messages.map((item) => item.status === "streaming" && item.generation?.type === "video" ? { ...item, content: message, status: "error", generation: undefined } : item) } : conversation);
+          const updated: Conversation[] = conversations.map((conversation) => activeId && conversation.id === activeId ? { ...conversation, messages: conversation.messages.map((item) => item.status === "streaming" && item.generation?.type === "video" ? { ...item, content: message, status: "error", generation: undefined } : item) } : conversation);
           await memoryStore.saveConversations(updated); window.dispatchEvent(new Event("ambi:conversation-sync"));
         } catch { /* keep the visible failure state */ }
         await sleep(900);
