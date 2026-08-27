@@ -10,16 +10,24 @@ type MediaMode = "chat" | "image" | "video";
 
 function mediaIntent(text: string): MediaMode {
   const normalized = text.trim().toLowerCase();
-  if (/\b(generate|create|make|draw|design)\b.{0,24}\b(an?\s*)?(image|picture|photo|illustration)\b/.test(normalized) || /^(image|picture|photo)\s*[:,-]/.test(normalized)) return "image";
-  if (/\b(generate|create|make|produce|animate)\b.{0,24}\b(a\s*)?(video|clip|movie|animation)\b/.test(normalized) || /^(video|clip|animation)\s*[:,-]/.test(normalized)) return "video";
+  const image = /\b(?:generate|create|make|draw|design|imagine|visualize)\b[\s\S]{0,48}\b(?:image|picture|photo|illustration|art|poster|wallpaper|logo|icon|portrait)\b/.test(normalized)
+    || /\b(?:image|picture|photo|illustration|art|poster|wallpaper|logo|icon|portrait)\s+(?:of|for|showing)\b/.test(normalized)
+    || /^(?:image|picture|photo|illustration|art|poster|wallpaper|logo|icon|portrait)\s*[:,-]/.test(normalized);
+  const video = /\b(?:generate|create|make|produce|animate|render)\b[\s\S]{0,48}\b(?:video|clip|movie|animation|reel|short)\b/.test(normalized)
+    || /\b(?:video|clip|movie|animation|reel|short)\s+(?:of|about|showing)\b/.test(normalized)
+    || /^(?:video|clip|movie|animation|reel|short)\s*[:,-]/.test(normalized);
+  if (image && !video) return "image";
+  if (video && !image) return "video";
+  if (video) return "video";
+  if (image) return "image";
   return "chat";
 }
 
 function mediaPrompt(text: string, mode: "image" | "video") {
   const normalized = text.trim();
   const pattern = mode === "image"
-    ? /^(?:please\s+)?(?:generate|create|make|draw|design)\s+(?:an?\s+)?(?:image|picture|photo|illustration)\s*(?:of|showing|depicting|with)?\s*/i
-    : /^(?:please\s+)?(?:generate|create|make|produce|animate)\s+(?:a\s+)?(?:video|clip|movie|animation)\s*(?:of|showing|depicting|with)?\s*/i;
+    ? /^(?:please\s+)?(?:generate|create|make|draw|design|imagine|visualize)\s+(?:an?\s+)?(?:image|picture|photo|illustration|art|poster|wallpaper|logo|icon|portrait)\s*(?:of|showing|depicting|with|for)?\s*/i
+    : /^(?:please\s+)?(?:generate|create|make|produce|animate|render)\s+(?:a\s+)?(?:video|clip|movie|animation|reel|short)\s*(?:of|showing|depicting|with|about|for)?\s*/i;
   return normalized.replace(pattern, "").trim() || normalized;
 }
 
@@ -54,10 +62,35 @@ export default function Composer({ onSend, onStop, busy, webSearch, onToggleRese
   }
   async function attachImage(file?: File) {
     const selected = file ?? fileRef.current?.files?.[0]; if (!selected) return;
-    if (!selected.type.startsWith("image/")) { setVoiceError("Choose an image file."); return; }
-    if (selected.size > 6 * 1024 * 1024) { setVoiceError("Image must be 6 MB or smaller."); return; }
-    try { const reader = new FileReader(); const data = await new Promise<string>((resolve, reject) => { reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("Could not read image.")); reader.onerror = () => reject(reader.error || new Error("Could not read image.")); reader.readAsDataURL(selected); }); setImageDataUrl(data); setImageName(selected.name); setMediaMode("chat"); setVoiceError(""); }
-    catch (error) { setVoiceError(error instanceof Error ? error.message : "Could not attach image."); }
+    if (!/^image\/(png|jpe?g|webp)$/i.test(selected.type)) { setVoiceError("Use PNG, JPG, JPEG, or WebP."); return; }
+    if (selected.size > 12 * 1024 * 1024) { setVoiceError("Image must be 12 MB or smaller."); return; }
+    try {
+      const data = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("Could not read image."));
+        reader.onerror = () => reject(reader.error || new Error("Could not read image."));
+        reader.readAsDataURL(selected);
+      });
+      const optimized = await new Promise<string>((resolve) => {
+        const image = new Image();
+        image.onload = () => {
+          const maxSide = 1600;
+          const scale = Math.min(1, maxSide / Math.max(image.naturalWidth || image.width, image.naturalHeight || image.height));
+          const width = Math.max(1, Math.round((image.naturalWidth || image.width) * scale));
+          const height = Math.max(1, Math.round((image.naturalHeight || image.height) * scale));
+          const canvas = document.createElement("canvas");
+          canvas.width = width; canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) { resolve(data); return; }
+          ctx.drawImage(image, 0, 0, width, height);
+          const output = canvas.toDataURL("image/webp", 0.82);
+          resolve(output.startsWith("data:image/webp") ? output : data);
+        };
+        image.onerror = () => resolve(data);
+        image.src = data;
+      });
+      setImageDataUrl(optimized); setImageName(selected.name); setMediaMode("chat"); setVoiceError("");
+    } catch (error) { setVoiceError(error instanceof Error ? error.message : "Could not attach image."); }
   }
   function voice() {
     const speechWindow = window as SpeechWindow; const Recognition = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition; setVoiceError("");
@@ -79,7 +112,7 @@ export default function Composer({ onSend, onStop, busy, webSearch, onToggleRese
     {mediaMode !== "chat" && <div className="composer-mode-label"><span className="image-mode-dot"/> {label}</div>}
     {imageDataUrl && <div className="attachment-chip"><img src={imageDataUrl} alt="Attached image preview"/><span>{imageName || "Image attached"}</span><button type="button" aria-label="Remove attached image" onClick={() => { setImageDataUrl(""); setImageName(""); }}>×</button></div>}
     <textarea ref={inputRef} value={value} onChange={(e) => { setValue(e.target.value); setVoiceError(""); requestAnimationFrame(resize); }} onInput={resize} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); } }} placeholder={placeholder} rows={1} aria-label={placeholder} />
-    <input ref={fileRef} hidden type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(e) => void attachImage(e.target.files?.[0])} />
+    <input ref={fileRef} hidden type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => void attachImage(e.target.files?.[0])} />
     <div className="composer-row"><div className="composer-tools">
       <button className={`tool ${webSearch ? "active" : ""}`} onClick={onToggleResearch} type="button" aria-pressed={webSearch}>⌁ Research</button>
       <button className={`tool ${listening ? "active" : ""}`} onClick={voice} type="button" aria-pressed={listening}>◉ {listening ? "Listening" : "Voice"}</button>
