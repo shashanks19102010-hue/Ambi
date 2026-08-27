@@ -19,7 +19,15 @@ export async function runOptionalTool(name: string, input: string): Promise<Tool
         headers: { "X-Ambi-Tool": "web-search" },
       });
       const data = (await response.json().catch(() => ({}))) as { results?: Array<{ title?: string; url?: string; content?: string; snippet?: string }>; disabled?: boolean };
-      if (!response.ok) return { name, ok: false, text: data.disabled ? "Web research is disabled. Enable it in Settings." : "Web research is unavailable right now." };
+      if (!response.ok) {
+        const retryable = response.status === 408 || response.status === 425 || response.status === 429 || response.status >= 500;
+        if (retryable && attempt < definition.maxRetries) {
+          attempt += 1;
+          await new Promise((resolve) => setTimeout(resolve, Math.min(4000, 500 * 2 ** (attempt - 1))));
+          continue;
+        }
+        return { name, ok: false, text: data.disabled ? "Web research is disabled. Enable it in Settings." : "Web research is unavailable right now." };
+      }
       const warnings = new Set<string>();
       const items = (data.results ?? []).slice(0, 6).map((result) => {
         const scan = scanExternalContent(result.content ?? result.snippet ?? "");
