@@ -49,15 +49,37 @@ export default function Composer({ onSend, onStop, busy, webSearch, onToggleRese
     return () => { recognitionRef.current?.stop(); ["image", "video"].forEach((kind) => { window.removeEventListener(`ambi:${kind}-start`, start); window.removeEventListener(`ambi:${kind}-end`, end); }); };
   }, []);
   function resize() { const el = inputRef.current; if (!el) return; el.style.height = "0px"; el.style.height = `${Math.min(el.scrollHeight, 180)}px`; }
-  function submit() {
+  async function submit() {
     const text = value.trim(); if (!text || busy || mediaBusy) return;
     const detected = mediaMode === "chat" ? mediaIntent(text) : mediaMode;
     const effective = detected === "chat" ? "chat" : detected;
-    if (effective === "image") window.dispatchEvent(new CustomEvent("ambi:generate-image", { detail: { prompt: mediaPrompt(text, "image"), model: imageModel } }));
-    else if (effective === "video") window.dispatchEvent(new CustomEvent("ambi:generate-video", { detail: { prompt: mediaPrompt(text, "video"), model: videoModel } }));
-    else {
+
+    if (effective === "image" || effective === "video") {
+      try {
+        // Puter websites require user authentication before cloud AI access.
+        // Keep this lazy so normal chat typing never loads/opens Puter.
+        const { getPuter } = await import("@/lib/media/puter");
+        const puter = await getPuter();
+        if (!puter.auth.isSignedIn()) {
+          await puter.auth.signIn();
+        }
+        setVoiceError("");
+        window.dispatchEvent(new CustomEvent(
+          effective === "image" ? "ambi:generate-image" : "ambi:generate-video",
+          { detail: { prompt: mediaPrompt(text, effective), model: effective === "image" ? imageModel : videoModel } },
+        ));
+      } catch (error) {
+        setVoiceError(
+          error instanceof Error
+            ? error.message || "Puter authentication was cancelled or failed."
+            : "Puter authentication was cancelled or failed.",
+        );
+        return;
+      }
+    } else {
       onSend(text, imageDataUrl || undefined);
     }
+
     setValue(""); setImageDataUrl(""); setImageName(""); setMediaMode("chat"); requestAnimationFrame(resize);
   }
   async function attachImage(file?: File) {
