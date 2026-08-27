@@ -49,16 +49,16 @@ export default function ImageGenerationBridge() {
         const active = conversations.find((conversation) => conversation.id === activeId) ?? conversations.find((conversation) => !conversation.archived) ?? newConversation(prompt.slice(0, 48));
         const imageMessageId = uid("msg");
         const placeholder: Message = { id: imageMessageId, role: "assistant", content: "", createdAt: Date.now(), status: "streaming", source: "cloud", generation: { type: "image", phase: "preparing", model: selectedModel } };
-        const seeded = { ...active, title: active.messages.length ? active.title : prompt.slice(0, 48), messages: [...active.messages, placeholder], updatedAt: Date.now() };
-        const next = conversations.some((conversation) => conversation.id === active.id) ? conversations.map((conversation) => conversation.id === active.id ? seeded : conversation) : [seeded, ...conversations];
+        const seeded: Conversation = { ...active, title: active.messages.length ? active.title : prompt.slice(0, 48), messages: [...active.messages, placeholder], updatedAt: Date.now() };
+        const next: Conversation[] = conversations.some((conversation) => conversation.id === active.id) ? conversations.map((conversation) => conversation.id === active.id ? seeded : conversation) : [seeded, ...conversations];
         await memoryStore.saveConversations(next); await memoryStore.saveActiveConversationId(active.id); window.dispatchEvent(new Event("ambi:conversation-sync"));
         await sleep(450); setPhase("creating");
-        const creating = next.map((conversation) => conversation.id === active.id ? { ...conversation, messages: conversation.messages.map((message) => message.id === imageMessageId ? { ...message, generation: { type: "image", phase: "creating", model: selectedModel } } : message) } : conversation);
+        const creating: Conversation[] = next.map((conversation) => conversation.id === active.id ? { ...conversation, messages: conversation.messages.map((message) => message.id === imageMessageId ? { ...message, generation: { type: "image", phase: "creating", model: selectedModel } } : message) } : conversation);
         await memoryStore.saveConversations(creating); window.dispatchEvent(new Event("ambi:conversation-sync"));
 
         const result = await runImage(prompt, selectedModel);
         setPhase("finishing");
-        const finished = creating.map((conversation) => conversation.id === active.id ? { ...conversation, messages: conversation.messages.map((message) => message.id === imageMessageId ? { ...message, content: "Created image", status: "complete", media: { type: "image", dataUrl: result.src, alt: prompt }, generation: undefined } : message), updatedAt: Date.now() } : conversation);
+        const finished: Conversation[] = creating.map((conversation) => conversation.id === active.id ? { ...conversation, messages: conversation.messages.map((message) => message.id === imageMessageId ? { ...message, content: "Created image", status: "complete", media: { type: "image", dataUrl: result.src, alt: prompt }, generation: undefined } : message), updatedAt: Date.now() } : conversation);
         await memoryStore.saveConversations(finished); window.dispatchEvent(new Event("ambi:conversation-sync"));
         await sleep(350);
       } catch (generationError) {
@@ -67,7 +67,7 @@ export default function ImageGenerationBridge() {
         try {
           const conversations = await memoryStore.loadConversations();
           const activeId = await memoryStore.loadActiveConversationId();
-          const updated = conversations.map((conversation) => activeId && conversation.id === activeId ? { ...conversation, messages: conversation.messages.map((item) => item.status === "streaming" && item.generation?.type === "image" ? { ...item, content: message, status: "error", generation: undefined } : item) } : conversation);
+          const updated: Conversation[] = conversations.map((conversation) => activeId && conversation.id === activeId ? { ...conversation, messages: conversation.messages.map((item) => item.status === "streaming" && item.generation?.type === "image" ? { ...item, content: message, status: "error", generation: undefined } : item) } : conversation);
           await memoryStore.saveConversations(updated); window.dispatchEvent(new Event("ambi:conversation-sync"));
         } catch { /* keep the visible failure state */ }
         await sleep(900);
