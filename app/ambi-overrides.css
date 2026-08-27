@@ -28,3 +28,23 @@ html[data-theme="dark"] .secondary,html[data-theme="oled"] .secondary{color:var(
 /* System theme: light baseline first, then dark device preference override. */
 html[data-theme="system"]{--bg:#f4f1ea;--panel:#f8f6f1;--card:#fffdf8;--card-2:#f0eee7;--text:#1d201c;--muted:#777a72;--line:#dfddd4;--line-2:#d3d0c6;--sage:#66765f;--sage-soft:#e6ebe1;--accent:#262a25;--danger:#9b4b42}
 @media(prefers-color-scheme:dark){html[data-theme="system"]{--bg:#171914;--panel:#1c1e19;--card:#21231d;--card-2:#272a23;--text:#f1f3eb;--muted:#a6aa9f;--line:#353932;--line-2:#44483e;--sage:#a1b29a;--sage-soft:#293328;--accent:#f1f3eb;--danger:#d68178}}
+
+
+/* Media sizing: attached images stay compact in chat while preserving the generated result. */
+.message-media-card.attached-image-card,
+.message.user .attached-image-card { width: fit-content; max-width: min(360px, 100%); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: var(--card); box-shadow: var(--shadow-soft); margin: 10px 0; }
+.message-media-card.attached-image-card img,
+.message.user .attached-image-card img { display: block; width: auto; max-width: min(360px, 82vw); max-height: 420px; height: auto; object-fit: contain; background: var(--panel); }
+.generated-image-card img { max-width: 100%; max-height: min(720px, 68vh); object-fit: contain; }
+.generated-video-card video { max-width: 100%; max-height: min(720px, 68vh); object-fit: contain; }
+.media-model-note { color: var(--muted); font-size: 10px; line-height: 1.4; margin-top: 4px; }
+@media(max-width:560px){
+  .message-media-card.attached-image-card,
+  .message.user .attached-image-card { max-width: calc(100vw - 48px); }
+  .message-media-card.attached-image-card img,
+  .message.user .attached-image-card img { max-width: calc(100vw - 72px); max-height: 360px; }
+}
+html[data-theme="dark"] .attachment-chip,
+html[data-theme="oled"] .attachment-chip { background:var(--panel); color:var(--text); border-color:var(--line); }
+html[data-theme="dark"] .message-media-card,
+html[data-theme="oled"] .message-media-card { background:var(--card); border-color:var(--line); }
