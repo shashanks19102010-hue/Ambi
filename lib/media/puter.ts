@@ -4,8 +4,8 @@ type MediaElementLike = { src?: string; currentSrc?: string };
 type PuterResult = string | MediaElementLike | unknown;
 
 export async function getPuter() {
-  const module = await import("@heyputer/puter.js");
-  return module.puter;
+  const puterModule = await import("@heyputer/puter.js");
+  return puterModule.puter;
 }
 
 export function getMediaSource(result: PuterResult, kind: MediaKind) {
