@@ -9,6 +9,7 @@ import { buildContext } from "@/lib/memory/context";
 import { checkUserMessage, redactSecrets } from "@/lib/security/safety";
 import { streamCloudChat, CloudInferenceError } from "@/lib/ai/cloud";
 import { runOptionalTool } from "@/lib/tools/router";
+import { wantsWebSearch } from "@/lib/tools/intents";
 import { detectCapabilities } from "@/lib/ai/capabilities";
 import Composer from "@/components/Composer";
 import EmptyState from "@/components/EmptyState";
@@ -110,7 +111,8 @@ export default function AmbiShell() {
     let citations: Message["citations"] = [];
     try {
       let toolText = "";
-      if (settings.webSearch) {
+      const researchRequested = settings.webSearch || wantsWebSearch(clean);
+      if (researchRequested) {
         const result = await runOptionalTool("web_search", clean);
         if (result.ok) { citations = result.citations ?? []; toolText = `[Untrusted web research]\n${result.text}`; setHealth((h) => ({ ...h, webSearch: "ready" })); }
         else { setHealth((h) => ({ ...h, webSearch: "error" })); toolText = `[Web research unavailable]\n${result.text}`; }
