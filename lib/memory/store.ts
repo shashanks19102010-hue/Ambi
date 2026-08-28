@@ -1,5 +1,4 @@
 import { DB_NAME, DB_VERSION, DEFAULT_CLOUD_MODEL_ID, MAX_CONVERSATIONS, CLOUD_MODEL_CATALOG, STORE_NAME } from "@/lib/constants";
-import { DEFAULT_PUTER_IMAGE_MODEL, DEFAULT_PUTER_VIDEO_MODEL, normalizeMediaModel } from "@/lib/media/puter-models";
 import type { AppSettings, Conversation, MemoryItem } from "@/types/chat";
 
 type RecordValue = { key: string; value: unknown };
@@ -51,8 +50,6 @@ const normalizeSettings = (value: unknown): AppSettings | null => {
   const model = CLOUD_MODEL_CATALOG.some((item) => item.id === requestedModel) ? requestedModel : DEFAULT_CLOUD_MODEL_ID;
   return {
     model,
-    imageModel: normalizeMediaModel(typeof candidate.imageModel === "string" ? candidate.imageModel : DEFAULT_PUTER_IMAGE_MODEL, "image"),
-    videoModel: normalizeMediaModel(typeof candidate.videoModel === "string" ? candidate.videoModel : DEFAULT_PUTER_VIDEO_MODEL, "video"),
     webSearch: Boolean(candidate.webSearch),
     safetyMode: candidate.safetyMode === "balanced" ? "balanced" : "strict",
     memoryEnabled: candidate.memoryEnabled !== false,
