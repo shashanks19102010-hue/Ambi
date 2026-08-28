@@ -29,7 +29,8 @@ export interface Message {
   source?: "local" | "web" | "tool" | "cloud";
   citations?: Citation[];
   media?: MediaAttachment;
-  generation?: ImageGenerationState;\n  pexels?: PexelsMedia[];
+  generation?: ImageGenerationState;
+  pexels?: PexelsMedia[];
 }
 
 export interface Conversation { id: string; title: string; messages: Message[]; createdAt: number; updatedAt: number; pinned?: boolean; archived?: boolean; favorite?: boolean; tags?: string[]; projectId?: string; }
