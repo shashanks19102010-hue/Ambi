@@ -60,3 +60,10 @@ html[data-theme="oled"] .message-media-card { background:var(--card); border-col
 .pexels-attribution{display:block;margin-top:9px;color:var(--muted);font-size:9px;}
 .pexels-search-status{position:fixed;left:50%;bottom:94px;transform:translateX(-50%);z-index:20;padding:7px 11px;border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--text);box-shadow:var(--shadow-soft);font-size:10px;}
 @media(max-width:560px){.pexels-grid{grid-template-columns:1fr;}}
+
+/* Automatic media-generation state */
+.generation-status{display:flex;align-items:center;gap:10px;margin:10px 0;padding:12px 14px;border:1px solid var(--line);border-radius:16px;background:var(--card);color:var(--text);box-shadow:var(--shadow-soft);}
+.generation-status .generation-orb{width:28px;height:28px;border-radius:50%;background:radial-gradient(circle at 35% 35%,rgba(255,255,255,.8),rgba(120,150,120,.4) 35%,transparent 70%);animation:ambiPulse 1.8s ease-in-out infinite;}
+.generation-status strong{font-size:11px;display:block}.generation-status span{font-size:9px;color:var(--muted);display:block;margin-top:2px;}
+@keyframes ambiPulse{0%,100%{transform:scale(.94);opacity:.65}50%{transform:scale(1.06);opacity:1}}
+.attachment-chip img{width:56px!important;height:56px!important;max-width:56px!important;object-fit:cover;border-radius:10px;}
