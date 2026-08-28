@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { AppSettings } from "@/types/chat";
 import { PUTER_IMAGE_MODELS, PUTER_VIDEO_MODELS } from "@/lib/media/puter-models";
+import { wantsPexelsSearch, pexelsMediaKind } from "@/lib/tools/intents";
 
 type SpeechRecognitionLike = { lang: string; continuous: boolean; interimResults: boolean; start: () => void; stop: () => void; onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null; onend: (() => void) | null; onerror: ((event: { error?: string }) => void) | null };
 type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
