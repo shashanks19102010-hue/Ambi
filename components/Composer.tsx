@@ -74,7 +74,6 @@ export default function Composer({
   const [voiceError, setVoiceError] = useState("");
   const [imageDataUrl, setImageDataUrl] = useState("");
   const [imageName, setImageName] = useState("");
-  const [mediaMode, setMediaMode] = useState<MediaMode>("chat");
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
@@ -86,9 +85,6 @@ export default function Composer({
     };
   }, []);
 
-  useEffect(() => {
-    setMediaMode(value.trim() ? detectMediaMode(value) : "chat");
-  }, [value]);
 
   function resize() {
     const el = inputRef.current;
