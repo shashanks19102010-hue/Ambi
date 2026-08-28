@@ -2,6 +2,18 @@ export type Role = "system" | "user" | "assistant" | "tool";
 export type MessageStatus = "complete" | "streaming" | "error";
 
 export interface Citation { title: string; url: string; snippet?: string; }
+export interface PexelsMedia {
+  id: number;
+  type: "photo" | "video";
+  title: string;
+  pexelsUrl: string;
+  previewUrl: string;
+  mediaUrl?: string;
+  width: number;
+  height: number;
+  photographer: string;
+  photographerUrl: string;
+}
 export interface ImageAttachment { type: "image"; dataUrl: string; alt: string; }
 export interface VideoAttachment { type: "video"; url: string; alt: string; }
 export interface ImageGenerationState { type: "image" | "video"; phase: "preparing" | "creating" | "finishing"; model?: string; }
@@ -17,7 +29,7 @@ export interface Message {
   source?: "local" | "web" | "tool" | "cloud";
   citations?: Citation[];
   media?: MediaAttachment;
-  generation?: ImageGenerationState;
+  generation?: ImageGenerationState;\n  pexels?: PexelsMedia[];
 }
 
 export interface Conversation { id: string; title: string; messages: Message[]; createdAt: number; updatedAt: number; pinned?: boolean; archived?: boolean; favorite?: boolean; tags?: string[]; projectId?: string; }
