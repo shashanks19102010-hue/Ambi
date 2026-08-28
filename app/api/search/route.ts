@@ -30,7 +30,9 @@ export async function GET(request: Request) {
   const rate = checkRateLimit(request, { limit: 20, windowMs: 60_000 });
   if (!rate.ok) return rateLimitResponse(rate.retryAfterSeconds);
   const query = url.searchParams.get("q")?.trim() ?? "";
-  if (!query || query.length > 300) return NextResponse.json({ results: [], error: "A valid research query is required." }, { status: 400 });\n\n  const pexelsKey = process.env["PEXELS" + "_API_KEY"]?.trim() || "";
+  if (!query || query.length > 300) return NextResponse.json({ results: [], error: "A valid research query is required." }, { status: 400 });
+
+  const pexelsKey = process.env["PEXELS" + "_API_KEY"]?.trim() || "";
   if (pexelsKey && /^(find|search|show|get|browse|give)\b.*\b(photo|photos|image|images|picture|pictures|video|videos|footage|clip|clips)\b/i.test(query)) {
     const wantsVideo = /\b(video|videos|footage|clip|clips)\b/i.test(query);
     const endpoint = wantsVideo ? "https://api.pexels.com/v1/videos/search" : "https://api.pexels.com/v1/search";
