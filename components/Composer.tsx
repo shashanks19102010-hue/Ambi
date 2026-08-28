@@ -215,7 +215,7 @@ export default function Composer({
   const disabled = !value.trim() || busy;
   const mediaMode = value.trim() ? detectMediaMode(value) : "chat";
   const researchActive = webSearch || wantsWebSearch(value);
-  const modeLabel = mediaMode === "image" ? "Image creation detected" : mediaMode === "video" ? "Video creation detected" : webSearch ? "Research enabled" : "";
+  const modeLabel = mediaMode === "image" ? "Image creation detected" : mediaMode === "video" ? "Video creation detected" : researchActive ? "Research detected" : "";
 
   return (
     <div className="composer-wrap">
