@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   const type = url.searchParams.get("type") === "video" ? "video" : "photo";
   const page = Math.min(Math.max(Number(url.searchParams.get("page") ?? "1") || 1, 1), 100);
   const orientation = url.searchParams.get("orientation") ?? "";
-  const token = process.env.PEXELS_TOKEN?.trim() ?? "";
+  const token = process.env.PEXELS_API_KEY?.trim() ?? "";
 
   if (!token) return NextResponse.json({ ok: false, error: "Pexels is not configured on this deployment." }, { status: 503 });
   if (!query || query.length > 180) return NextResponse.json({ ok: false, error: "Enter a valid search query." }, { status: 400 });
