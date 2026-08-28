@@ -20,9 +20,9 @@ function ddgResults(data: { AbstractText?: string; AbstractURL?: string; Heading
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const probe = url.searchParams.get("probe") === "1";
-  const enabled = process.env.AMBI_WEB_SEARCH_ENABLED === "1";
   const tavilyKey = process.env.TAVILY_API_KEY?.trim() || "";
-  const tavilyConfigured = enabled && Boolean(tavilyKey);
+  const enabled = process.env.AMBI_WEB_SEARCH_ENABLED === "1" || Boolean(tavilyKey);
+  const tavilyConfigured = Boolean(tavilyKey);
 
   if (probe) return NextResponse.json({ ok: true, enabled, provider: tavilyConfigured ? "tavily" : enabled ? "duckduckgo" : "disabled", configured: enabled, tavilyConfigured }, { headers: { "Cache-Control": "no-store" } });
   if (!enabled) return NextResponse.json({ results: [], disabled: true, provider: "disabled" }, { status: 503, headers: { "Cache-Control": "no-store" } });
