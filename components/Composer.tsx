@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { wantsWebSearch } from "@/lib/tools/intents";
 
 type SpeechRecognitionLike = {
   lang: string;
@@ -116,8 +117,7 @@ export default function Composer({
     setValue("");
     setImageDataUrl("");
     setImageName("");
-    setMediaMode("chat");
-    requestAnimationFrame(resize);
+     requestAnimationFrame(resize);
   }
 
   async function attachImage(file?: File) {
@@ -213,6 +213,8 @@ export default function Composer({
   }
 
   const disabled = !value.trim() || busy;
+  const mediaMode = value.trim() ? detectMediaMode(value) : "chat";
+  const researchActive = webSearch || wantsWebSearch(value);
   const modeLabel = mediaMode === "image" ? "Image creation detected" : mediaMode === "video" ? "Video creation detected" : webSearch ? "Research enabled" : "";
 
   return (
@@ -243,7 +245,7 @@ export default function Composer({
         <input ref={fileRef} hidden type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => void attachImage(event.target.files?.[0])} />
         <div className="composer-row">
           <div className="composer-tools">
-            <button className={`tool ${webSearch ? "active" : ""}`} onClick={onToggleResearch} type="button" aria-pressed={webSearch}>⌁ Research</button>
+            <button className={`tool ${researchActive ? "active" : ""}`} onClick={onToggleResearch} type="button" aria-pressed={researchActive}>⌁ Research</button>
             <button className={`tool ${listening ? "active" : ""}`} onClick={voice} type="button">{listening ? "◉ Listening" : "◉ Voice"}</button>
             <button className="tool" onClick={() => fileRef.current?.click()} type="button">⌕ Attach</button>
           </div>
