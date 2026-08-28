@@ -9,6 +9,7 @@ Ambi is a calm, local-first AI workspace for the browser. The project supports l
 - **Persistent local memory:** IndexedDB via `lib/memory/store.ts`.
 - **Recovery:** `lib/recovery/watchdog.ts` checkpoints storage every 30s, retries health checks with exponential backoff, records recovery events, and exposes `HealthState` to the UI. `app/error.tsx` isolates React render crashes.
 - **Cloud reliability:** `lib/ai/cloud.ts` retries transient network/provider errors up to three times and detects incomplete streams. The chat route also applies server-side request limiting.
+- **Stock media:** optional Pexels photo/video search runs through a server-side proxy; the API key is never exposed to the browser.
 - **Web research:** the server proxy is **fail-closed**. It only runs when `AMBI_WEB_SEARCH_ENABLED=1`; the default example is `0`. Tavily is used when configured, otherwise the explicitly enabled mode can use DuckDuckGo as its fallback.
 - **Security headers:** the single source of truth is `next.config.ts`. It sets CSP, COOP, CORP, Permissions-Policy, X-Frame-Options, and related hardening headers. `wasm-unsafe-eval` is used instead of general `unsafe-eval` for WebAssembly compatibility.
 - **Safety firewall:** `lib/security/safety.ts` is defense-in-depth only. It blocks a small set of obvious high-risk patterns and common prompt-injection phrases; it is not a complete safety system.
