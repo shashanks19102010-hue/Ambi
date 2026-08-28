@@ -55,27 +55,11 @@ export default function Composer({ onSend, onStop, busy, webSearch, onToggleRese
     const effective = detected === "chat" ? "chat" : detected;
 
     if (effective === "image" || effective === "video") {
-      try {
-        // Puter websites require user authentication before cloud AI access.
-        // Keep this lazy so normal chat typing never loads/opens Puter.
-        const { getPuter } = await import("@/lib/media/puter");
-        const puter = await getPuter();
-        if (!puter.auth.isSignedIn()) {
-          await puter.auth.signIn();
-        }
-        setVoiceError("");
-        window.dispatchEvent(new CustomEvent(
-          effective === "image" ? "ambi:generate-image" : "ambi:generate-video",
-          { detail: { prompt: mediaPrompt(text, effective), model: effective === "image" ? imageModel : videoModel } },
-        ));
-      } catch (error) {
-        setVoiceError(
-          error instanceof Error
-            ? error.message || "Puter authentication was cancelled or failed."
-            : "Puter authentication was cancelled or failed.",
-        );
-        return;
-      }
+      setVoiceError("");
+      window.dispatchEvent(new CustomEvent(
+        effective === "image" ? "ambi:generate-image" : "ambi:generate-video",
+        { detail: { prompt: mediaPrompt(text, effective), model: effective === "image" ? imageModel : videoModel } },
+      ));
     } else {
       onSend(text, imageDataUrl || undefined);
     }
