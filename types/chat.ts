@@ -16,7 +16,6 @@ export interface PexelsMedia {
 }
 export interface ImageAttachment { type: "image"; dataUrl: string; alt: string; }
 export interface VideoAttachment { type: "video"; url: string; alt: string; }
-export interface ImageGenerationState { type: "image" | "video"; phase: "preparing" | "creating" | "finishing"; model?: string; }
 export type MediaAttachment = ImageAttachment | VideoAttachment;
 
 export interface Message {
@@ -29,7 +28,6 @@ export interface Message {
   source?: "local" | "web" | "tool" | "cloud";
   citations?: Citation[];
   media?: MediaAttachment;
-  generation?: ImageGenerationState;
   pexels?: PexelsMedia[];
 }
 
@@ -37,7 +35,7 @@ export interface Conversation { id: string; title: string; messages: Message[]; 
 export type ResponseStyle = "concise" | "normal" | "detailed" | "expert";
 export type AppLanguage = "auto" | "en" | "hi" | "hinglish";
 export type Theme = "light" | "dark" | "system" | "oled";
-export interface AppSettings { model: string; imageModel: string; videoModel: string; webSearch: boolean; safetyMode: "strict" | "balanced"; memoryEnabled: boolean; autoRecover: boolean; localOnly: boolean; responseStyle: ResponseStyle; language: AppLanguage; theme: Theme; reducedMotion: boolean; temporaryChat: boolean; developerMode: boolean; }
+export interface AppSettings { model: string; webSearch: boolean; safetyMode: "strict" | "balanced"; memoryEnabled: boolean; autoRecover: boolean; localOnly: boolean; responseStyle: ResponseStyle; language: AppLanguage; theme: Theme; reducedMotion: boolean; temporaryChat: boolean; developerMode: boolean; }
 export interface MemoryItem { id: string; kind: "preference" | "project" | "context" | "temporary"; text: string; createdAt: number; updatedAt: number; sourceConversationId?: string; expiresAt?: number; approved: boolean; }
 export interface ToolResult { name: string; ok: boolean; text: string; source?: string; citations?: Citation[]; }
 export interface HealthState { inference: "ready" | "loading" | "unavailable" | "error"; storage: "ready" | "degraded"; network: "online" | "offline"; recovery: "idle" | "recovering" | "safe" | "failed"; lastRecoveryAt: number | null; safeMode: boolean; webSearch: "ready" | "disabled" | "error"; }
