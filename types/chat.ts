@@ -17,6 +17,11 @@ export interface PexelsMedia {
 export interface ImageAttachment { type: "image"; dataUrl: string; alt: string; }
 export interface VideoAttachment { type: "video"; url: string; alt: string; }
 export type MediaAttachment = ImageAttachment | VideoAttachment;
+export interface GenerationState {
+  type: "image" | "video";
+  phase: "preparing" | "creating" | "finishing";
+  model?: string;
+}
 
 export interface Message {
   id: string;
@@ -29,6 +34,7 @@ export interface Message {
   citations?: Citation[];
   media?: MediaAttachment;
   pexels?: PexelsMedia[];
+  generation?: GenerationState;
 }
 
 export interface Conversation { id: string; title: string; messages: Message[]; createdAt: number; updatedAt: number; pinned?: boolean; archived?: boolean; favorite?: boolean; tags?: string[]; projectId?: string; }
