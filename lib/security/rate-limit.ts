@@ -34,6 +34,30 @@ export function checkRateLimit(request: Request, options: RateLimitOptions): { o
   return { ok: false, retryAfterSeconds };
 }
 
+
+export async function checkSharedRateLimit(request: Request, options: RateLimitOptions, scope = "default"): Promise<{ ok: boolean; retryAfterSeconds: number }> {
+  const redisUrl = process.env.UPSTASH_REDIS_REST_URL?.trim().replace(/\/$/, "");
+  const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
+  if (!redisUrl || !redisToken) return checkRateLimit(request, options);
+  const rawClient = getClientKey(request);
+  const safeClient = rawClient.replace(/[^a-zA-Z0-9_.:-]/g, "_").slice(0, 100) || "unknown";
+  const key = encodeURIComponent(`ambi:rl:${scope}:${safeClient}:${options.limit}:${options.windowMs}`);
+  try {
+    const response = await fetch(`${redisUrl}/incr/${key}`, { method: "POST", headers: { Authorization: `Bearer ${redisToken}`, Accept: "application/json" }, cache: "no-store" });
+    if (!response.ok) throw new Error(`Upstash HTTP ${response.status}`);
+    const payload = await response.json() as { result?: number | string };
+    const count = Number(payload.result);
+    if (!Number.isFinite(count)) throw new Error("Invalid Upstash rate-limit result.");
+    if (count === 1) {
+      await fetch(`${redisUrl}/expire/${key}/${Math.max(1, Math.ceil(options.windowMs / 1000))}`, { method: "POST", headers: { Authorization: `Bearer ${redisToken}` }, cache: "no-store" });
+    }
+    if (count > options.limit) return { ok: false, retryAfterSeconds: Math.max(1, Math.ceil(options.windowMs / 1000)) };
+    return { ok: true, retryAfterSeconds: 0 };
+  } catch {
+    return checkRateLimit(request, options);
+  }
+}
+
 export function rateLimitResponse(retryAfterSeconds: number) {
   return Response.json(
     { error: "Too many requests. Please wait a moment and try again.", retryAfterSeconds },
