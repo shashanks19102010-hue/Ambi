@@ -9,6 +9,7 @@ function blobToDataUrl(blob: Blob): Promise<string> { return new Promise((resolv
 
 export default function MediaGenerationBridge(){
  const busyRef=useRef(false);
+ const controllerRef=useRef<AbortController|null>(null);
  useEffect(()=>{
   const generate=async(event:Event)=>{
    if(busyRef.current)return;
