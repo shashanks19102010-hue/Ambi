@@ -43,7 +43,7 @@ async function requestWithRetry(body: string, signal?: AbortSignal): Promise<Res
   throw new CloudInferenceError(lastError instanceof Error ? lastError.message : "Network request failed after automatic retries.", "NETWORK");
 }
 
-async function runLocalFallback(messages: Message[], signal: AbortSignal, onDelta: (text: string) => void) {
+async function runLocalFallback(messages: Message[], signal: AbortSignal | undefined, onDelta: (text: string) => void) {
   if (signal.aborted) throw new CloudInferenceError("Generation stopped.", "ABORTED");
   try {
     for await (const delta of chatWithRecovery(LOCAL_FALLBACK_MODEL, messages)) {
@@ -99,7 +99,7 @@ export async function streamCloudChat({ messages, model, signal, onDelta, imageD
     if (signal?.aborted) throw new CloudInferenceError("Generation stopped.", "ABORTED");
     if (error instanceof CloudInferenceError && ["RATE_LIMIT", "REMOTE_RETRY_EXHAUSTED", "NETWORK", "STREAM", "INCOMPLETE_STREAM"].includes(error.code)) {
       console.warn("[Ambi recovery] switching to local fallback", error.code);
-      await runLocalFallback(messages, signal as AbortSignal, onDelta);
+      await runLocalFallback(messages, signal, onDelta);
       return;
     }
     throw error;
