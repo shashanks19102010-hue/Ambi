@@ -58,14 +58,14 @@ async function runLocalFallback(messages: Message[], signal: AbortSignal, onDelt
   }
 }
 
-export async function streamCloudChat({ messages, model, signal, onDelta, imageDataUrl }: { messages: Message[]; model: string; signal?: AbortSignal; onDelta: (text: string) => void; imageDataUrl?: string }) {
+export async function streamCloudChat({ messages, model, signal, onDelta, imageDataUrl, systemExtras, memories, toolNotes }: { messages: Message[]; model: string; signal?: AbortSignal; onDelta: (text: string) => void; imageDataUrl?: string; systemExtras?: { language?: "auto" | "en" | "hi" | "hinglish"; responseStyle?: "concise" | "normal" | "detailed" | "expert" }; memories?: string[]; toolNotes?: string }) {
   if (signal?.aborted) throw new CloudInferenceError("Generation stopped.", "ABORTED");
   let attachedImage = imageDataUrl;
   if (!attachedImage && typeof window !== "undefined") {
     try { attachedImage = sessionStorage.getItem("ambi:vision-image") || undefined; sessionStorage.removeItem("ambi:vision-image"); } catch { attachedImage = undefined; }
   }
   try {
-    const response = await requestWithRetry(JSON.stringify({ model, messages, imageDataUrl: attachedImage }), signal);
+    const response = await requestWithRetry(JSON.stringify({ model, messages, imageDataUrl: attachedImage, systemExtras, memories, toolNotes }), signal);
     if (!response.ok) {
       let detail = `AI request failed (${response.status}).`;
       try { const body = await response.json() as { error?: string; message?: string }; detail = body.error || body.message || detail; } catch { /* keep status */ }
