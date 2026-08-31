@@ -48,7 +48,9 @@ export default function Composer({
   const [listening, setListening] = useState(false);
   const [voiceError, setVoiceError] = useState("");
   const [imageDataUrl, setImageDataUrl] = useState("");
-  const [imageName, setImageName] = useState(""); const [manualMode, setManualMode] = useState<MediaMode>("chat");
+  const [imageName, setImageName] = useState("");
+  const [manualMode, setManualMode] = useState<MediaMode>("chat");
+  const [mediaBusy, setMediaBusy] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
