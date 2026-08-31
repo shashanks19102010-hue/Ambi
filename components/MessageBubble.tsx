@@ -45,7 +45,7 @@ function chunkForSpeech(text: string, size = 2600) {
 export default function MessageBubble({ message }: { message: Message }) {
   const [copied, setCopied] = useState(false); const [speaking, setSpeaking] = useState(false);
   const parts = message.content.split(/(```[\s\S]*?```)/g);
-  const source = message.source === "cloud" ? "GROQ AI" : message.source === "web" ? "WEB RESEARCH" : message.source === "local" ? "LOCAL" : null;
+  const source = message.source === "cloud" ? "GROQ AI" : message.source === "web" ? "WEB RESEARCH" : message.source === "tool" ? "MEDIA" : message.source === "local" ? "LOCAL" : null;
   async function copy(text: string) { try { await navigator.clipboard.writeText(text); setCopied(true); window.setTimeout(() => setCopied(false), 1400); } catch { setCopied(false); } }
   function readAloud() {
     if (!("speechSynthesis" in window)) return;
