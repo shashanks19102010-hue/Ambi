@@ -14,8 +14,8 @@ export interface PexelsMedia {
   photographer: string;
   photographerUrl: string;
 }
-export interface ImageAttachment { type: "image"; dataUrl: string; alt: string; }
-export interface VideoAttachment { type: "video"; url: string; alt: string; }
+export interface ImageAttachment { type: "image"; dataUrl: string; alt: string; transient?: boolean; }
+export interface VideoAttachment { type: "video"; url: string; alt: string; transient?: boolean; }
 export type MediaAttachment = ImageAttachment | VideoAttachment;
 export interface GenerationState {
   type: "image" | "video";
