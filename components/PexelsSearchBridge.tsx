@@ -71,10 +71,10 @@ export default function PexelsSearchBridge() {
     };
 
     const stop = () => controllerRef.current?.abort();
-    window.addEventListener("ambi:search-pexels", search);
+    window.addEventListener("ambi:search-pexels-job", search);
     window.addEventListener("ambi:pexels-stop", stop);
     return () => {
-      window.removeEventListener("ambi:search-pexels", search);
+      window.removeEventListener("ambi:search-pexels-job", search);
       window.removeEventListener("ambi:pexels-stop", stop);
       controllerRef.current?.abort();
     };
