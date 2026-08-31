@@ -30,3 +30,7 @@ button:disabled{color:var(--muted)}
 .connection-pill.health-healthy,.connection-pill.ready{color:var(--sage)!important}
 html[data-theme="dark"] .connection-pill.health-degraded{color:#e1c47e!important}
 html[data-theme="dark"] .connection-pill.health-down{color:#e59a91!important}
+
+/* High-contrast assistant avatar in dark and OLED modes. */
+html[data-theme="dark"] .avatar:not(.user),html[data-theme="oled"] .avatar:not(.user){background:#eef1e9!important;color:#162019!important;border:1px solid rgba(255,255,255,.16)}
+html[data-theme="dark"] .avatar.user,html[data-theme="oled"] .avatar.user{background:#293129!important;color:#eef1e9!important;border-color:#566057!important}
