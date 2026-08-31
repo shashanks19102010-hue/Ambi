@@ -198,7 +198,8 @@ export default function Composer({
   }
 
   const intent = detectRequestIntent(value);
-  const mediaMode = mediaModeForIntent(intent);
+  const detectedMode = mediaModeForIntent(intent);
+  const mediaMode = manualMode !== "chat" ? manualMode : detectedMode;
   const disabled = !value.trim() || busy || mediaBusy;
   const researchActive = webSearch || intent === "research";
   const modeLabel = mediaMode === "image" ? "Image creation detected" : mediaMode === "video" ? "Video creation detected" : researchActive ? "Research detected" : "";
@@ -218,7 +219,7 @@ export default function Composer({
           value={value}
           onChange={(event) => { setValue(event.target.value); setVoiceError(""); requestAnimationFrame(resize); }}
           onInput={resize}
-          onKeyDown={(event) => { if (event.key === "Enter" && event.ctrlKey) event.preventDefault(); }}
+          onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); } }}
           placeholder={mediaMode === "image" ? "Describe the image…" : mediaMode === "video" ? "Describe the video…" : busy ? "Ambi is responding…" : "Message Ambi…"}
           rows={1}
           aria-label="Message Ambi"
