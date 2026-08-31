@@ -135,7 +135,7 @@ export default function AmbiShell() {
     void (async () => {
       try {
         const [saved, storedSettings, storedActive] = await Promise.all([memoryStore.loadConversations(), memoryStore.loadSettings(), memoryStore.loadActiveConversationId()]);
-        const safeSettings = storedSettings ? { ...DEFAULT_SETTINGS, ...storedSettings, localOnly: false } : DEFAULT_SETTINGS;
+        const safeSettings = storedSettings ? { ...DEFAULT_SETTINGS, ...storedSettings } : DEFAULT_SETTINGS;
         setConversations(saved); setSettings(safeSettings); setActiveId(storedActive && saved.some((c) => c.id === storedActive) ? storedActive : saved.find((c) => !c.archived)?.id ?? null);
         await Promise.all([refreshAiHealth(), refreshResearchHealth()]);
       } catch { setHealth((h) => ({ ...h, storage: "degraded", recovery: "safe", safeMode: true, lastRecoveryAt: Date.now() })); }
