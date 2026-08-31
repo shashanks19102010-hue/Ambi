@@ -62,16 +62,12 @@ const normalizeSettings = (value: unknown): AppSettings | null => {
   return {
     model,
     webSearch: Boolean(candidate.webSearch),
-    safetyMode: candidate.safetyMode === "balanced" ? "balanced" : "strict",
     memoryEnabled: candidate.memoryEnabled !== false,
-    autoRecover: candidate.autoRecover !== false,
-    localOnly: Boolean(candidate.localOnly),
     responseStyle: candidate.responseStyle === "concise" || candidate.responseStyle === "detailed" || candidate.responseStyle === "expert" ? candidate.responseStyle : "normal",
     language: candidate.language === "en" || candidate.language === "hi" || candidate.language === "hinglish" ? candidate.language : "auto",
     theme: candidate.theme === "dark" || candidate.theme === "light" || candidate.theme === "oled" ? candidate.theme : "system",
     reducedMotion: Boolean(candidate.reducedMotion),
     temporaryChat: Boolean(candidate.temporaryChat),
-    developerMode: Boolean(candidate.developerMode),
   };
 };
 
