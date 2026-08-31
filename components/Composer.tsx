@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { wantsWebSearch } from "@/lib/tools/intents";
+import { detectRequestIntent, type RequestIntent } from "@/lib/tools/intents";
 
 type SpeechRecognitionLike = {
   lang: string;
@@ -20,42 +20,17 @@ type SpeechWindow = Window & {
 };
 type MediaMode = "chat" | "image" | "video";
 
-const IMAGE_WORDS = /\b(image|picture|photo|illustration|art|poster|wallpaper|logo|icon|portrait)\b/i;
-const VIDEO_WORDS = /\b(video|clip|movie|animation|reel|short|footage)\b/i;
-const ACTION_WORDS = /\b(create|generate|make|draw|design|produce|animate|render|visualize|imagine)\b/i;
+const IMAGE_ACTION_RE = /\b(?:create|generate|make|draw|design|visualize|imagine)\s+(?:an?\s+)?(?:image|picture|photo|illustration|artwork|poster|wallpaper|logo|icon|portrait)\b/i;
+const VIDEO_ACTION_RE = /\b(?:create|generate|make|produce|animate|render)\s+(?:a\s+)?(?:video|clip|movie|animation|reel|short)\b(?!\s+game\b)/i;
 
-function detectMediaMode(text: string): MediaMode {
-  const normalized = text.trim();
-  if (!ACTION_WORDS.test(normalized)) return "chat";
-  const hasVideo = VIDEO_WORDS.test(normalized);
-  const hasImage = IMAGE_WORDS.test(normalized);
-  if (hasVideo && !hasImage) return "video";
-  if (hasImage && !hasVideo) return "image";
-  if (hasVideo) return "video";
-  return "image";
+function mediaModeForIntent(intent: RequestIntent): MediaMode {
+  return intent === "image" ? "image" : intent === "video" ? "video" : "chat";
 }
-
 function cleanMediaPrompt(text: string, mode: "image" | "video") {
-  const words = text.trim().split(/\s+/);
-  if (!words.length) return text.trim();
-  const stopWords = new Set(["please", "an", "a", "the", "of", "showing", "depicting", "with", "about", "for"]);
-  const mediaWords = mode === "image" ? IMAGE_WORDS : VIDEO_WORDS;
-  let start = 0;
-  while (start < words.length && (stopWords.has(words[start].toLowerCase().replace(/[^a-z]/g, "")) || ACTION_WORDS.test(words[start]))) {
-    start += 1;
-  }
-  if (start < words.length && mediaWords.test(words[start])) start += 1;
-  while (start < words.length && stopWords.has(words[start].toLowerCase().replace(/[^a-z]/g, ""))) start += 1;
-  const result = words.slice(start).join(" ").trim();
-  return result || text.trim();
+  const pattern = mode === "image" ? IMAGE_ACTION_RE : VIDEO_ACTION_RE;
+  const cleaned = text.replace(pattern, "").trim();
+  return cleaned || text.trim();
 }
-
-function isPexelsSearch(text: string) {
-  const normalized = text.trim().toLowerCase();
-  const lookup = normalized.includes("pexels") || /\b(find|search|show|browse|get|give me|look for)\b/.test(normalized);
-  return lookup && (IMAGE_WORDS.test(normalized) || VIDEO_WORDS.test(normalized));
-}
-
 export default function Composer({
   onSend,
   onStop,
@@ -97,14 +72,14 @@ export default function Composer({
     const text = value.trim();
     if (!text || busy) return;
 
-    const detected = detectMediaMode(text);
+    const detected = detectRequestIntent(text);
     if (detected === "image" || detected === "video") {
       window.dispatchEvent(new CustomEvent("ambi:generate-media", {
         detail: { type: detected, prompt: cleanMediaPrompt(text, detected) },
       }));
-    } else if (isPexelsSearch(text)) {
+    } else if (detected === "pexels-photo" || detected === "pexels-video") {
       window.dispatchEvent(new CustomEvent("ambi:search-pexels", {
-        detail: { query: text, type: VIDEO_WORDS.test(text) ? "video" : "photo" },
+        detail: { query: text, type: detected === "pexels-video" ? "video" : "photo" },
       }));
     } else {
       onSend(text, imageDataUrl || undefined);
@@ -208,9 +183,10 @@ export default function Composer({
     }
   }
 
+  const intent = detectRequestIntent(value);
+  const mediaMode = mediaModeForIntent(intent);
   const disabled = !value.trim() || busy;
-  const mediaMode = value.trim() ? detectMediaMode(value) : "chat";
-  const researchActive = webSearch || wantsWebSearch(value);
+  const researchActive = webSearch || intent === "research";
   const modeLabel = mediaMode === "image" ? "Image creation detected" : mediaMode === "video" ? "Video creation detected" : researchActive ? "Research detected" : "";
 
   return (
