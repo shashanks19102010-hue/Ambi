@@ -218,12 +218,7 @@ export default function Composer({
           value={value}
           onChange={(event) => { setValue(event.target.value); setVoiceError(""); requestAnimationFrame(resize); }}
           onInput={resize}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-              event.preventDefault();
-              void submit();
-            }
-          }}
+          onKeyDown={(event) => { if (event.key === "Enter" && event.ctrlKey) event.preventDefault(); }}
           placeholder={mediaMode === "image" ? "Describe the image…" : mediaMode === "video" ? "Describe the video…" : busy ? "Ambi is responding…" : "Message Ambi…"}
           rows={1}
           aria-label="Message Ambi"
