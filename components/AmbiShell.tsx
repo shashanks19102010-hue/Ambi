@@ -90,8 +90,8 @@ export default function AmbiShell() {
       const d = (event as CustomEvent<{ query?: string; type?: "photo" | "video" }>).detail ?? {};
       const query = d.query?.trim() ?? "";
       if (!query) return;
-      const chatId = activeId ?? uid("chat");
-      const current = conversations.find((item) => item.id === chatId) ?? { ...newConversation(), id: chatId, title: titleFor(query) };
+      const chatId = activeIdRef.current ?? uid("chat");
+      const current = conversationsRef.current.find((item) => item.id === chatId) ?? { ...newConversation(), id: chatId, title: titleFor(query) };
       const messageId = uid("msg");
       const user: Message = { id: uid("msg"), role: "user", content: query, createdAt: Date.now(), status: "complete" };
       const placeholder: Message = { id: messageId, role: "assistant", content: "Searching Pexels…", createdAt: Date.now(), status: "streaming", source: "web" };
