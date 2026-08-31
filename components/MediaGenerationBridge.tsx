@@ -17,13 +17,15 @@ export default function MediaGenerationBridge(){
    if(!type||!prompt)return;
    busyRef.current=true;
    const startName=type==="image"?"ambi:image-start":"ambi:video-start"; const endName=type==="image"?"ambi:image-end":"ambi:video-end";
-   window.dispatchEvent(new Event(startName));
+   window.dispatchEvent(new Event("ambi:media-start"));
+   window.dispatchEvent(new CustomEvent(startName));
    try{
     const [saved,activeId]=await Promise.all([memoryStore.loadConversations(),memoryStore.loadActiveConversationId()]);
     const active=saved.find(c=>c.id===activeId)||saved.find(c=>!c.archived)||newConversation(prompt);
     const messageId=uid("msg");
+    const userMessage:Message={id:uid("msg"),role:"user",content:prompt,createdAt:Date.now(),status:"complete"};
     const placeholder:Message={id:messageId,role:"assistant",content:"",createdAt:Date.now(),status:"streaming",generation:{type,phase:"preparing" as const}};
-    const seeded:Conversation={...active,title:active.messages.length?active.title:prompt.slice(0,48),messages:[...active.messages,placeholder],updatedAt:Date.now()};
+    const seeded:Conversation={...active,title:active.messages.length?active.title:prompt.slice(0,48),messages:[...active.messages,userMessage,placeholder],updatedAt:Date.now()};
     const save=(items:Conversation[])=>memoryStore.saveConversations(items);
     const next=saved.some(c=>c.id===active.id)?saved.map(c=>c.id===active.id?seeded:c):[seeded,...saved];
     await save(next); await memoryStore.saveActiveConversationId(active.id); window.dispatchEvent(new Event("ambi:conversation-sync"));
@@ -33,7 +35,8 @@ export default function MediaGenerationBridge(){
     let lastError:unknown;
     for(let attempt=0;attempt<3;attempt++){
       try{
-        const response=await fetch("/api/media/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type,prompt}),cache:"no-store"});
+        const controller=new AbortController(); controllerRef.current=controller;
+        const response=await fetch("/api/media/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type,prompt}),cache:"no-store",signal:controller.signal});
         if(!response.ok){const data=await response.json().catch(()=>({})) as {error?:string}; throw new Error(data.error||"Media generation failed.");}
         const blob=await response.blob(); if(!blob.size)throw new Error("Generated media was empty.");
         const dataUrl=await blobToDataUrl(blob);
@@ -45,9 +48,10 @@ export default function MediaGenerationBridge(){
    }catch(error){
     const message=error instanceof Error?error.message:"Media generation failed.";
     try{const saved=await memoryStore.loadConversations();const activeId=await memoryStore.loadActiveConversationId();const updated=saved.map(c=>activeId&&c.id===activeId?{...c,messages:c.messages.map(m=>m.status==="streaming"&&m.generation?.type===type?{...m,content:message,status:"error" as const,generation:undefined}:m),updatedAt:Date.now()}:c);await memoryStore.saveConversations(updated);window.dispatchEvent(new Event("ambi:conversation-sync"));}catch{}
-   }finally{window.dispatchEvent(new Event(endName));busyRef.current=false;}
+   }finally{controllerRef.current=null;window.dispatchEvent(new Event("ambi:media-end"));window.dispatchEvent(new CustomEvent(endName));busyRef.current=false;}
   };
-  window.addEventListener("ambi:generate-media",generate); return()=>window.removeEventListener("ambi:generate-media",generate);
+  const stop=()=>controllerRef.current?.abort();
+  window.addEventListener("ambi:generate-media",generate); window.addEventListener("ambi:media-stop",stop); return()=>{window.removeEventListener("ambi:generate-media",generate);window.removeEventListener("ambi:media-stop",stop);controllerRef.current?.abort();};
  },[]);
  return null;
 }
