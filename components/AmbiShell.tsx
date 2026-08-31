@@ -69,7 +69,7 @@ export default function AmbiShell() {
       const current = conversationsRef.current.find((item) => item.id === chatId) ?? { ...newConversation(), id: chatId, title: titleFor(prompt) };
       const messageId = uid("msg");
       const user: Message = { id: uid("msg"), role: "user", content: prompt, createdAt: Date.now(), status: "complete" };
-      const placeholder: Message = { id: messageId, role: "assistant", content: type === "image" ? "Creating image…" : "Creating video…", createdAt: Date.now(), status: "streaming", source: "cloud", generation: { type, phase: "creating" } };
+      const placeholder: Message = { id: messageId, role: "assistant", content: type === "image" ? "Creating image…" : "Creating video…", createdAt: Date.now(), status: "streaming", source: "tool", generation: { type, phase: "creating" } };
       const next = { ...current, title: current.messages.length ? current.title : titleFor(prompt), messages: [...current.messages, user, placeholder], updatedAt: Date.now() };
       setConversations((items) => items.some((item) => item.id === chatId) ? items.map((item) => item.id === chatId ? next : item) : [next, ...items]);
       setActiveId(chatId);
