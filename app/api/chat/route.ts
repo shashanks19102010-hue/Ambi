@@ -1,5 +1,6 @@
 import { CLOUD_MODEL_CATALOG, DEFAULT_CLOUD_MODEL_ID, SYSTEM_PROMPT } from "@/lib/constants";
-import { checkRateLimit, rateLimitResponse } from "@/lib/security/rate-limit";
+import { checkSharedRateLimit, rateLimitResponse } from "@/lib/security/rate-limit";
+import { originError, sameOriginAllowed } from "@/lib/security/request";
 import { checkUserMessage, redactSecrets } from "@/lib/security/safety";
 
 export const runtime = "nodejs";
@@ -122,7 +123,7 @@ function providerHeaders(error: unknown): Record<string, string> {
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  if (url.searchParams.get("probe") !== "1") return Response.json({ ok: true, provider: "groq", configured: Boolean(key()), model: modelOf(undefined), visionModel: VISION_MODEL, models: CLOUD_MODEL_CATALOG }, { headers: { "Cache-Control": "no-store" } });
+  if (url.searchParams.get("probe") !== "1") return Response.json({ ok: true, provider: "groq", model: modelOf(undefined), visionModel: VISION_MODEL, models: CLOUD_MODEL_CATALOG }, { headers: { "Cache-Control": "no-store" } });
   const started = Date.now();
   try {
     const selected = modelOf(undefined);
@@ -138,7 +139,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const rate = checkRateLimit(request, { limit: 20, windowMs: 60_000 });
+  if (!sameOriginAllowed(request)) return originError();
+  const rate = await checkSharedRateLimit(request, { limit: 20, windowMs: 60_000 }, "chat");
   if (!rate.ok) return rateLimitResponse(rate.retryAfterSeconds);
   if (!key()) return Response.json({ error: "Groq API key is not configured on this deployment." }, { status: 503 });
   try {
