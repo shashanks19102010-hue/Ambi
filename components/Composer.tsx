@@ -54,6 +54,17 @@ export default function Composer({
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   useEffect(() => {
+    const start = () => setMediaBusy(true);
+    const end = () => setMediaBusy(false);
+    window.addEventListener("ambi:media-start", start);
+    window.addEventListener("ambi:media-end", end);
+    return () => {
+      window.removeEventListener("ambi:media-start", start);
+      window.removeEventListener("ambi:media-end", end);
+    };
+  }, []);
+
+  useEffect(() => {
     return () => {
       recognitionRef.current?.stop();
       if ("speechSynthesis" in window) window.speechSynthesis.cancel();
@@ -70,7 +81,7 @@ export default function Composer({
 
   async function submit() {
     const text = value.trim();
-    if (!text || busy) return;
+    if (!text || busy || mediaBusy) return;
 
     const detected = manualMode !== "chat" ? manualMode : detectRequestIntent(text);
     if (detected === "image" || detected === "video") {
@@ -186,7 +197,7 @@ export default function Composer({
 
   const intent = detectRequestIntent(value);
   const mediaMode = mediaModeForIntent(intent);
-  const disabled = !value.trim() || busy;
+  const disabled = !value.trim() || busy || mediaBusy;
   const researchActive = webSearch || intent === "research";
   const modeLabel = mediaMode === "image" ? "Image creation detected" : mediaMode === "video" ? "Video creation detected" : researchActive ? "Research detected" : "";
 
@@ -223,7 +234,7 @@ export default function Composer({
             <button className="tool" onClick={() => fileRef.current?.click()} type="button">⌕ Attach</button><button className={`tool ${mediaMode === "image" ? "active" : ""}`} onClick={() => setManualMode((mode) => mode === "image" ? "chat" : "image")} type="button" aria-pressed={mediaMode === "image"}>✦ Image</button><button className={`tool ${mediaMode === "video" ? "active" : ""}`} onClick={() => setManualMode((mode) => mode === "video" ? "chat" : "video")} type="button" aria-pressed={mediaMode === "video"}>▷ Video</button>
           </div>
           <span className="hint">{modeLabel || (imageDataUrl ? "Attached image ready" : "Shift+Enter for a new line")}</span>
-          {busy ? <button className="send stop" onClick={onStop} type="button">Stop</button> : <button className="send" onClick={() => void submit()} type="button" disabled={disabled}>{mediaMode === "image" ? "Create image" : mediaMode === "video" ? "Create video" : "Send"}</button>}
+          {busy ? <button className="send stop" onClick={onStop} type="button">Stop</button> : mediaBusy ? <button className="send stop" onClick={() => window.dispatchEvent(new Event("ambi:media-stop"))} type="button">Stop</button> : <button className="send" onClick={() => void submit()} type="button" disabled={disabled}>{mediaMode === "image" ? "Create image" : mediaMode === "video" ? "Create video" : "Send"}</button>}
         </div>
         {voiceError && <div className="composer-error" role="status">{voiceError}</div>}
       </div>
