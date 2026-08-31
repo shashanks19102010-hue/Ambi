@@ -24,7 +24,7 @@ export default function PexelsSearchBridge() {
   useEffect(() => {
     const search = async (event: Event) => {
       if (busy.current) return;
-      const detail = (event as CustomEvent<{ chatId?: string; query?: string; type?: "photo" | "video" }>).detail;
+      const detail = (event as CustomEvent<{ chatId?: string; messageId?: string; query?: string; type?: "photo" | "video" }>).detail;
       const chatId = detail?.chatId?.trim() ?? "";
       const query = detail?.query?.trim() ?? "";
       const type = detail?.type === "video" ? "video" : "photo";
@@ -47,6 +47,7 @@ export default function PexelsSearchBridge() {
         window.dispatchEvent(new CustomEvent("ambi:pexels-result", {
           detail: {
             chatId,
+            messageId: detail?.messageId,
             query,
             type,
             results,
@@ -57,6 +58,7 @@ export default function PexelsSearchBridge() {
         window.dispatchEvent(new CustomEvent("ambi:pexels-result", {
           detail: {
             chatId,
+            messageId: detail?.messageId,
             query,
             type,
             error: error instanceof Error ? error.message : "Pexels search failed.",
