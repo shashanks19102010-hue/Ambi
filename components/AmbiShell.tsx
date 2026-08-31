@@ -5,7 +5,6 @@ import type { AppSettings, CapabilityState, Conversation, HealthState, Message }
 import { CLOUD_MODEL_CATALOG, DEFAULT_SETTINGS, SYSTEM_PROMPT } from "@/lib/constants";
 import { uid } from "@/lib/id";
 import { memoryStore } from "@/lib/memory/store";
-import { buildContext } from "@/lib/memory/context";
 import { checkUserMessage, redactSecrets } from "@/lib/security/safety";
 import { streamCloudChat, CloudInferenceError } from "@/lib/ai/cloud";
 import { runOptionalTool } from "@/lib/tools/router";
@@ -117,13 +116,10 @@ export default function AmbiShell() {
         if (result.ok) { citations = result.citations ?? []; toolText = `[Untrusted web research]\n${result.text}`; setHealth((h) => ({ ...h, webSearch: "ready" })); }
         else { setHealth((h) => ({ ...h, webSearch: "error" })); toolText = `[Web research unavailable]\n${result.text}`; }
       }
-      const enriched: Conversation = toolText ? { ...conversationWithUser, messages: [...conversationWithUser.messages, { id: uid("tool"), role: "tool", content: toolText, createdAt: Date.now(), status: "complete", source: "web" }] } : conversationWithUser;
       const memories = settings.memoryEnabled && !settings.temporaryChat ? await memoryStore.loadMemories() : [];
-      const languageInstruction = settings.language === "hinglish" ? "Prefer natural Hinglish using Latin-script Hindi mixed with English technical terms." : settings.language === "hi" ? "Prefer Hindi, while keeping code and technical names in their original form." : settings.language === "en" ? "Answer in English." : "Match the user's language naturally.";
-      const styleInstruction = settings.responseStyle === "concise" ? "Keep answers concise and focused." : settings.responseStyle === "detailed" ? "Give a detailed, well-structured explanation." : settings.responseStyle === "expert" ? "Give technically rigorous, expert-level answers." : "Use a clear, balanced level of detail.";
-      const modelMessages = buildContext(enriched, `${SYSTEM_PROMPT}\n${languageInstruction}\n${styleInstruction}`, memories);
+      const memoryTexts = memories.filter((memory) => memory.approved && (!memory.expiresAt || memory.expiresAt > Date.now())).slice(-20).map((memory) => memory.text);
       let output = "";
-      await streamCloudChat({ messages: modelMessages, model: settings.model, signal: controller.signal, imageDataUrl, onDelta: (delta) => { if (requestIdRef.current !== requestId) return; output += delta; setConversations((items) => items.map((c) => c.id === chatId ? { ...c, messages: c.messages.map((m) => m.id === responseId ? { ...m, content: redactSecrets(output), citations } : m) } : c)); } });
+      await streamCloudChat({ messages: conversationWithUser.messages, model: settings.model, signal: controller.signal, imageDataUrl, systemExtras: { language: settings.language, responseStyle: settings.responseStyle }, memories: memoryTexts, toolNotes: toolText, onDelta: (delta) => { if (requestIdRef.current !== requestId) return; output += delta; setConversations((items) => items.map((c) => c.id === chatId ? { ...c, messages: c.messages.map((m) => m.id === responseId ? { ...m, content: redactSecrets(output), citations } : m) } : c)); } });
       if (requestIdRef.current !== requestId) return;
       const final = redactSecrets(output.trim()); if (!final) throw new CloudInferenceError("Groq returned no text. Please try again.", "EMPTY_RESPONSE");
       setConversations((items) => items.map((c) => c.id === chatId ? { ...c, messages: c.messages.map((m) => m.id === responseId ? { ...m, content: final, status: "complete", source: "cloud", citations } : m), updatedAt: Date.now() } : c)); setHealth((h) => ({ ...h, inference: "ready", safeMode: false, recovery: "idle", network: "online" }));
