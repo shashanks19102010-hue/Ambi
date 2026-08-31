@@ -44,10 +44,10 @@ async function requestWithRetry(body: string, signal?: AbortSignal): Promise<Res
 }
 
 async function runLocalFallback(messages: Message[], signal: AbortSignal | undefined, onDelta: (text: string) => void) {
-  if (signal.aborted) throw new CloudInferenceError("Generation stopped.", "ABORTED");
+  if (signal?.aborted) throw new CloudInferenceError("Generation stopped.", "ABORTED");
   try {
     for await (const delta of chatWithRecovery(LOCAL_FALLBACK_MODEL, messages)) {
-      if (signal.aborted) throw new CloudInferenceError("Generation stopped.", "ABORTED");
+      if (signal?.aborted) throw new CloudInferenceError("Generation stopped.", "ABORTED");
       onDelta(delta);
     }
   } catch (error) {
