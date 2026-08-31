@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { AppSettings, CapabilityState, Conversation, HealthState, Message } from "@/types/chat";
-import { CLOUD_MODEL_CATALOG, DEFAULT_SETTINGS, SYSTEM_PROMPT } from "@/lib/constants";
+import type { AppSettings, CapabilityState, Conversation, HealthState, Message, PexelsMedia } from "@/types/chat";
+import { CLOUD_MODEL_CATALOG, DEFAULT_SETTINGS } from "@/lib/constants";
 import { uid } from "@/lib/id";
 import { memoryStore } from "@/lib/memory/store";
 import { checkUserMessage, redactSecrets } from "@/lib/security/safety";
@@ -56,6 +56,71 @@ export default function AmbiShell() {
   }
 
   useEffect(() => {
+    const onMediaRequest = (event: Event) => {
+      const { type, prompt: rawPrompt } = (event as CustomEvent<{ type?: "image" | "video"; prompt?: string }>).detail ?? {};
+      const prompt = rawPrompt?.trim() ?? "";
+      if (!type || !prompt || busy) return;
+      const chatId = activeId ?? uid("chat");
+      const current = conversations.find((item) => item.id === chatId) ?? { ...newConversation(), id: chatId, title: titleFor(prompt) };
+      const messageId = uid("msg");
+      const user: Message = { id: uid("msg"), role: "user", content: prompt, createdAt: Date.now(), status: "complete" };
+      const placeholder: Message = { id: messageId, role: "assistant", content: type === "image" ? "Creating image…" : "Creating video…", createdAt: Date.now(), status: "streaming", source: "cloud", generation: { type, phase: "creating" } };
+      const next = { ...current, title: current.messages.length ? current.title : titleFor(prompt), messages: [...current.messages, user, placeholder], updatedAt: Date.now() };
+      setConversations((items) => items.some((item) => item.id === chatId) ? items.map((item) => item.id === chatId ? next : item) : [next, ...items]);
+      setActiveId(chatId);
+      window.dispatchEvent(new CustomEvent("ambi:media-job", { detail: { chatId, messageId, type, prompt } }));
+    };
+    const onMediaResult = (event: Event) => {
+      const d = (event as CustomEvent<{ chatId?: string; messageId?: string; type?: "image" | "video"; prompt?: string; url?: string; error?: string }>).detail ?? {};
+      if (!d.chatId || !d.messageId) return;
+      setConversations((items) => items.map((conversation) => conversation.id !== d.chatId ? conversation : {
+        ...conversation, updatedAt: Date.now(), messages: conversation.messages.map((message) => message.id !== d.messageId ? message :
+          d.error ? { ...message, content: d.error, status: "error" as const, generation: undefined } :
+          !d.url || !d.type ? { ...message, content: "Media generation returned no file.", status: "error" as const, generation: undefined } :
+          { ...message, content: d.type === "image" ? "Created image" : "Created video", status: "complete" as const,
+            media: d.type === "image" ? { type: "image" as const, dataUrl: d.url, alt: d.prompt ?? "", transient: true } : { type: "video" as const, url: d.url, alt: d.prompt ?? "", transient: true }, generation: undefined })
+      }));
+    };
+    const onPexelsRequest = (event: Event) => {
+      const d = (event as CustomEvent<{ query?: string; type?: "photo" | "video" }>).detail ?? {};
+      const query = d.query?.trim() ?? "";
+      if (!query) return;
+      const chatId = activeId ?? uid("chat");
+      const current = conversations.find((item) => item.id === chatId) ?? { ...newConversation(), id: chatId, title: titleFor(query) };
+      const messageId = uid("msg");
+      const user: Message = { id: uid("msg"), role: "user", content: query, createdAt: Date.now(), status: "complete" };
+      const placeholder: Message = { id: messageId, role: "assistant", content: "Searching Pexels…", createdAt: Date.now(), status: "streaming", source: "web" };
+      const next = { ...current, title: current.messages.length ? current.title : titleFor(query), messages: [...current.messages, user, placeholder], updatedAt: Date.now() };
+      setConversations((items) => items.some((item) => item.id === chatId) ? items.map((item) => item.id === chatId ? next : item) : [next, ...items]);
+      setActiveId(chatId);
+      window.dispatchEvent(new CustomEvent("ambi:search-pexels-job", { detail: { chatId, messageId, query, type: d.type === "video" ? "video" : "photo" } }));
+    };
+    const onPexelsResult = (event: Event) => {
+      const d = (event as CustomEvent<{ chatId?: string; messageId?: string; query?: string; type?: "photo" | "video"; results?: Array<{ id:number; type:"photo"|"video"; title:string; url:string; preview:string; media?:string; photographer:string; photographerUrl:string; width:number; height:number; duration?:number }>; error?: string }>).detail ?? {};
+      if (!d.chatId || !d.messageId) return;
+      setConversations((items) => items.map((conversation) => conversation.id !== d.chatId ? conversation : {
+        ...conversation, updatedAt: Date.now(), messages: conversation.messages.map((message) => {
+          if (message.id !== d.messageId) return message;
+          if (d.error) return { ...message, content: d.error, status: "error" as const };
+          const results: PexelsMedia[] = (d.results ?? []).slice(0, 12).map((item) => ({ id:item.id, type:item.type, title:item.title, pexelsUrl:item.url, previewUrl:item.preview, mediaUrl:item.media, width:item.width, height:item.height, photographer:item.photographer, photographerUrl:item.photographerUrl }));
+          const citations = results.map((item) => ({ title:item.title, url:item.pexelsUrl, snippet:`Media by ${item.photographer} on Pexels` }));
+          return { ...message, content: results.length ? `Here are Pexels ${d.type === "video" ? "video" : "photo"} results for “${d.query ?? ""}”.` : `No Pexels results were found for “${d.query ?? ""}”.`, status:"complete" as const, citations, pexels:results };
+        })
+      }));
+    };
+    window.addEventListener("ambi:generate-media", onMediaRequest);
+    window.addEventListener("ambi:media-result", onMediaResult);
+    window.addEventListener("ambi:search-pexels", onPexelsRequest);
+    window.addEventListener("ambi:pexels-result", onPexelsResult);
+    return () => {
+      window.removeEventListener("ambi:generate-media", onMediaRequest);
+      window.removeEventListener("ambi:media-result", onMediaResult);
+      window.removeEventListener("ambi:search-pexels", onPexelsRequest);
+      window.removeEventListener("ambi:pexels-result", onPexelsResult);
+    };
+  }, [activeId, conversations, busy]);
+
+  useEffect(() => {
     const syncNetwork = () => setHealth((h) => ({ ...h, network: navigator.onLine ? "online" : "offline" }));
     const syncConversations = () => { void memoryStore.loadConversations().then((saved) => setConversations(saved)).catch(() => setHealth((h) => ({ ...h, storage: "degraded" }))); };
     const onNew = () => { const chat = newConversation(); setConversations((items) => [chat, ...items]); setActiveId(chat.id); setHistoryOpen(false); setMobileNavOpen(false); };
@@ -91,7 +156,7 @@ export default function AmbiShell() {
   function createChat() { const chat = newConversation(); setConversations((items) => [chat, ...items]); setActiveId(chat.id); setHistoryOpen(false); setMobileNavOpen(false); }
   function deleteChat(id: string) { setConversations((items) => items.filter((item) => item.id !== id)); if (activeId === id) setActiveId(null); }
   function openSettings() { setMobileNavOpen(false); setSettingsOpen(true); }
-  function stop() { controllerRef.current?.abort(); requestIdRef.current = null; setBusy(false); }
+  function stop() { controllerRef.current?.abort(); requestIdRef.current = null; window.dispatchEvent(new Event("ambi:media-stop")); window.dispatchEvent(new Event("ambi:pexels-stop")); setBusy(false); }
 
   async function send(text: string, imageDataUrl?: string) {
     const clean = text.trim(); if (!clean || busy) return;
