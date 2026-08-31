@@ -27,16 +27,12 @@ export const CLOUD_MODEL_CATALOG = [
 export const DEFAULT_SETTINGS: AppSettings = {
   model: DEFAULT_CLOUD_MODEL_ID,
   webSearch: false,
-  safetyMode: "strict",
   memoryEnabled: true,
-  autoRecover: true,
-  localOnly: false,
   responseStyle: "normal",
   language: "auto",
   theme: "system",
   reducedMotion: false,
   temporaryChat: false,
-  developerMode: false,
 };
 
 export const SYSTEM_PROMPT = `You are Ambi, a calm, capable AI assistant.
