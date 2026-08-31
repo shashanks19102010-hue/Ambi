@@ -35,6 +35,11 @@ export default function AmbiShell() {
   const [search, setSearch] = useState("");
   const controllerRef = useRef<AbortController | null>(null);
   const requestIdRef = useRef<string | null>(null);
+  const conversationsRef = useRef(conversations);
+  const activeIdRef = useRef(activeId);
+  const busyRef = useRef(busy);
+  const temporaryChatRef = useRef(settings.temporaryChat);
+  useEffect(() => { conversationsRef.current = conversations; activeIdRef.current = activeId; busyRef.current = busy; temporaryChatRef.current = settings.temporaryChat; }, [conversations, activeId, busy, settings.temporaryChat]);
 
   const active = useMemo(() => conversations.find((item) => item.id === activeId) ?? null, [conversations, activeId]);
   const activeModel = CLOUD_MODEL_CATALOG.find((model) => model.id === settings.model) ?? CLOUD_MODEL_CATALOG[0];
@@ -59,9 +64,9 @@ export default function AmbiShell() {
     const onMediaRequest = (event: Event) => {
       const { type, prompt: rawPrompt } = (event as CustomEvent<{ type?: "image" | "video"; prompt?: string }>).detail ?? {};
       const prompt = rawPrompt?.trim() ?? "";
-      if (!type || !prompt || busy) return;
-      const chatId = activeId ?? uid("chat");
-      const current = conversations.find((item) => item.id === chatId) ?? { ...newConversation(), id: chatId, title: titleFor(prompt) };
+      if (!type || !prompt || busyRef.current) return;
+      const chatId = activeIdRef.current ?? uid("chat");
+      const current = conversationsRef.current.find((item) => item.id === chatId) ?? { ...newConversation(), id: chatId, title: titleFor(prompt) };
       const messageId = uid("msg");
       const user: Message = { id: uid("msg"), role: "user", content: prompt, createdAt: Date.now(), status: "complete" };
       const placeholder: Message = { id: messageId, role: "assistant", content: type === "image" ? "Creating image…" : "Creating video…", createdAt: Date.now(), status: "streaming", source: "cloud", generation: { type, phase: "creating" } };
@@ -118,7 +123,7 @@ export default function AmbiShell() {
       window.removeEventListener("ambi:search-pexels", onPexelsRequest);
       window.removeEventListener("ambi:pexels-result", onPexelsResult);
     };
-  }, [activeId, conversations, busy]);
+  }, []);
 
   useEffect(() => {
     const syncNetwork = () => setHealth((h) => ({ ...h, network: navigator.onLine ? "online" : "offline" }));
