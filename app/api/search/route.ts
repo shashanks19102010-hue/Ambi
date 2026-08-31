@@ -34,25 +34,6 @@ export async function GET(request: Request) {
   const query = url.searchParams.get("q")?.trim() ?? "";
   if (!query || query.length > 300) return NextResponse.json({ results: [], error: "A valid research query is required." }, { status: 400 });
 
-  const pexelsKey = process.env["PEXELS" + "_API_KEY"]?.trim() || "";
-  if (pexelsKey && /^(find|search|show|get|browse|give)\b.*\b(photo|photos|image|images|picture|pictures|video|videos|footage|clip|clips)\b/i.test(query)) {
-    const wantsVideo = /\b(video|videos|footage|clip|clips)\b/i.test(query);
-    const endpoint = wantsVideo ? "https://api.pexels.com/v1/videos/search" : "https://api.pexels.com/v1/search";
-    try {
-      const upstream = new URL(endpoint);
-      upstream.searchParams.set("query", query);
-      upstream.searchParams.set("per_page", "8");
-      const response = await fetch(upstream, { cache: "no-store", signal: AbortSignal.timeout(9000), headers: { Authorization: pexelsKey, Accept: "application/json" } });
-      const payload = await response.json().catch(() => ({})) as { photos?: Array<{ id:number; url:string; photographer?:string; photographer_url?:string; alt?:string; src?:{medium?:string;large?:string} }>; videos?: Array<{ id:number; url:string; image?:string; user?:{name?:string;url?:string}; video_files?:Array<{width?:number|null;link?:string;file_type?:string}> }> };
-      if (response.ok) {
-        const results = wantsVideo
-          ? (payload.videos ?? []).slice(0,8).map((v) => ({ title: "Pexels video", url: v.url, content: `Pexels video by ${v.user?.name ?? "contributor"} — ${v.image ?? ""}` }))
-          : (payload.photos ?? []).slice(0,8).map((p) => ({ title: p.alt || "Pexels photo", url: p.url, content: `Pexels photo by ${p.photographer ?? "contributor"} — ${p.src?.large ?? p.src?.medium ?? ""}` }));
-        if (results.length) return NextResponse.json({ results, provider: "pexels", type: wantsVideo ? "video" : "photo", attribution: "Photos and videos provided by Pexels" }, { headers: { "Cache-Control": "private, max-age=300" } });
-      }
-    } catch { /* fall through to normal research */ }
-  }
-
   if (tavilyConfigured) {
     try {
       const result = await fetch("https://api.tavily.com/search", { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json", "X-Ambi-Request": "research" }, body: JSON.stringify({ api_key: tavilyKey, query, max_results: 6, search_depth: "advanced", include_answer: false }), cache: "no-store", signal: AbortSignal.timeout(10_000) });
