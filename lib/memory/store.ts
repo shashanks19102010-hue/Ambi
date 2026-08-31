@@ -38,6 +38,17 @@ async function read<T>(key: string): Promise<T | null> {
   });
 }
 
+function persistableConversations(items: Conversation[]): Conversation[] {
+  return items.slice(0, MAX_CONVERSATIONS).map((conversation) => ({
+    ...conversation,
+    messages: conversation.messages.map((message) => {
+      if (!message.media?.transient) return message;
+      const { media: _media, ...withoutBinary } = message;
+      return withoutBinary;
+    }),
+  }));
+}
+
 const validConversations = (value: unknown): Conversation[] => {
   if (!Array.isArray(value)) return [];
   return value.filter((item): item is Conversation => Boolean(item && typeof item.id === "string" && Array.isArray(item.messages))).slice(0, MAX_CONVERSATIONS);
@@ -66,7 +77,7 @@ const normalizeSettings = (value: unknown): AppSettings | null => {
 
 export const memoryStore = {
   async loadConversations() { return validConversations(await read<unknown>("conversations")); },
-  async saveConversations(items: Conversation[]) { await write("conversations", items.slice(0, MAX_CONVERSATIONS)); },
+  async saveConversations(items: Conversation[]) { await write("conversations", persistableConversations(items)); },
   async loadActiveConversationId() { return read<string>("activeConversationId"); },
   async saveActiveConversationId(id: string | null) { await write("activeConversationId", id); },
   async loadSettings() { return normalizeSettings(await read<unknown>("settings")); },
