@@ -48,7 +48,7 @@ export default function Composer({
   const [listening, setListening] = useState(false);
   const [voiceError, setVoiceError] = useState("");
   const [imageDataUrl, setImageDataUrl] = useState("");
-  const [imageName, setImageName] = useState("");
+  const [imageName, setImageName] = useState(""); const [manualMode, setManualMode] = useState<MediaMode>("chat");
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
@@ -72,7 +72,7 @@ export default function Composer({
     const text = value.trim();
     if (!text || busy) return;
 
-    const detected = detectRequestIntent(text);
+    const detected = manualMode !== "chat" ? manualMode : detectRequestIntent(text);
     if (detected === "image" || detected === "video") {
       window.dispatchEvent(new CustomEvent("ambi:generate-media", {
         detail: { type: detected, prompt: cleanMediaPrompt(text, detected) },
@@ -88,7 +88,8 @@ export default function Composer({
     setValue("");
     setImageDataUrl("");
     setImageName("");
-     requestAnimationFrame(resize);
+     setManualMode("chat");
+    requestAnimationFrame(resize);
   }
 
   async function attachImage(file?: File) {
@@ -219,7 +220,7 @@ export default function Composer({
           <div className="composer-tools">
             <button className={`tool ${researchActive ? "active" : ""}`} onClick={onToggleResearch} type="button" aria-pressed={researchActive}>⌁ Research</button>
             <button className={`tool ${listening ? "active" : ""}`} onClick={voice} type="button">{listening ? "◉ Listening" : "◉ Voice"}</button>
-            <button className="tool" onClick={() => fileRef.current?.click()} type="button">⌕ Attach</button>
+            <button className="tool" onClick={() => fileRef.current?.click()} type="button">⌕ Attach</button><button className={`tool ${mediaMode === "image" ? "active" : ""}`} onClick={() => setManualMode((mode) => mode === "image" ? "chat" : "image")} type="button" aria-pressed={mediaMode === "image"}>✦ Image</button><button className={`tool ${mediaMode === "video" ? "active" : ""}`} onClick={() => setManualMode((mode) => mode === "video" ? "chat" : "video")} type="button" aria-pressed={mediaMode === "video"}>▷ Video</button>
           </div>
           <span className="hint">{modeLabel || (imageDataUrl ? "Attached image ready" : "Shift+Enter for a new line")}</span>
           {busy ? <button className="send stop" onClick={onStop} type="button">Stop</button> : <button className="send" onClick={() => void submit()} type="button" disabled={disabled}>{mediaMode === "image" ? "Create image" : mediaMode === "video" ? "Create video" : "Send"}</button>}
