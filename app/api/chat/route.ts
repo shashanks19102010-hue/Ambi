@@ -55,7 +55,7 @@ function contextInstructions(input: unknown): string {
         ? "Give technically rigorous, expert-level answers."
         : "Use a clear, balanced level of detail.";
   const memories = Array.isArray(value.memories)
-    ? value.memories.filter((item): item is string => typeof item === "string" && item.trim()).slice(-20).map((item) => redactSecrets(item.slice(0, 600))).join("\n- ")
+    ? value.memories.filter((item): item is string => typeof item === "string" && Boolean(item.trim())).slice(-20).map((item) => redactSecrets(item.slice(0, 600))).join("\n- ")
     : "";
   const tools = typeof value.toolNotes === "string" && value.toolNotes.trim()
     ? redactSecrets(value.toolNotes.slice(0, 5000))
