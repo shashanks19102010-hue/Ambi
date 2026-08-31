@@ -1,5 +1,6 @@
 import { CLOUD_MODEL_CATALOG, DEFAULT_CLOUD_MODEL_ID, SYSTEM_PROMPT } from "@/lib/constants";
 import { checkRateLimit, rateLimitResponse } from "@/lib/security/rate-limit";
+import { checkUserMessage, redactSecrets } from "@/lib/security/safety";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,6 +18,7 @@ type ImageContent = { type: "image_url"; image_url: { url: string } };
 type ChatContent = string | Array<TextContent | ImageContent>;
 type ChatMessage = { role: "system" | "user" | "assistant"; content: ChatContent };
 type HistoryMessage = { role: "user" | "assistant"; content: string };
+type ContextInput = { language?: "auto" | "en" | "hi" | "hinglish"; responseStyle?: "concise" | "normal" | "detailed" | "expert"; memories?: string[]; toolNotes?: string };
 type ProviderDelta = { choices?: Array<{ delta?: { content?: unknown } }> };
 
 function key() { return process.env.GROQ_API_KEY?.trim() || ""; }
@@ -111,13 +113,17 @@ export async function POST(request: Request) {
   if (!rate.ok) return rateLimitResponse(rate.retryAfterSeconds);
   if (!key()) return Response.json({ error: "Groq API key is not configured on this deployment." }, { status: 503 });
   try {
-    const body = await request.json() as { messages?: unknown; model?: unknown; imageDataUrl?: unknown };
+    const body = await request.json() as { messages?: unknown; model?: unknown; imageDataUrl?: unknown; systemExtras?: unknown; memories?: unknown; toolNotes?: unknown };
     const imageDataUrl = typeof body.imageDataUrl === "string" ? body.imageDataUrl : "";
     if (imageDataUrl && (!imageDataUrl.startsWith("data:image/") || imageDataUrl.length > MAX_IMAGE_DATA_URL)) return Response.json({ error: "The attached image is invalid or too large." }, { status: 400 });
     const history = normalize(body.messages);
+    const lastUserText = [...history].reverse().find((item) => item.role === "user")?.content ?? "";
+    const safety = checkUserMessage(lastUserText);
+    if (!safety.allowed) return Response.json({ error: safety.reason ?? "Request blocked by safety policy." }, { status: 400 });
     if (!history.length) return Response.json({ error: "No chat messages were provided." }, { status: 400 });
     const selected = imageDataUrl ? VISION_MODEL : modelOf(body.model);
-    const messages: ChatMessage[] = [{ role: "system", content: SYSTEM_PROMPT }, ...history];
+    const extras = contextInstructions({ ...(body.systemExtras as ContextInput | undefined), memories: Array.isArray(body.memories) ? body.memories : [], toolNotes: typeof body.toolNotes === "string" ? body.toolNotes : "" });
+    const messages: ChatMessage[] = [{ role: "system", content: extras ? `${SYSTEM_PROMPT}\n\n${extras}` : SYSTEM_PROMPT }, ...history];
     if (imageDataUrl) {
       let lastUser = -1;
       for (let index = messages.length - 1; index >= 0; index -= 1) { if (messages[index].role === "user") { lastUser = index; break; } }
