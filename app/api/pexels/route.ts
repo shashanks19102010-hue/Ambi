@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
-import { checkRateLimit, rateLimitResponse } from "@/lib/security/rate-limit";
+import { checkSharedRateLimit, rateLimitResponse } from "@/lib/security/rate-limit";
+import { originError, sameOriginAllowed } from "@/lib/security/request";
 
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
-  const rate = checkRateLimit(request, { limit: 20, windowMs: 60_000 });
+  if (!sameOriginAllowed(request)) return originError();
+  const rate = await checkSharedRateLimit(request, { limit: 20, windowMs: 60_000 }, "pexels");
   if (!rate.ok) return rateLimitResponse(rate.retryAfterSeconds);
 
   const url = new URL(request.url);
