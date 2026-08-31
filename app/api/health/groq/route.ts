@@ -1,4 +1,6 @@
 import { CLOUD_MODEL_CATALOG, DEFAULT_CLOUD_MODEL_ID } from "@/lib/constants";
+import { checkSharedRateLimit, rateLimitResponse } from "@/lib/security/rate-limit";
+import { originError, sameOriginAllowed } from "@/lib/security/request";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,8 +15,11 @@ export async function GET(request: Request) {
   const key = getKey();
   const model = DEFAULT_CLOUD_MODEL_ID;
   const probe = new URL(request.url).searchParams.get("probe") === "1";
-  if (!key) return Response.json({ ok: false, provider: "groq", configured: false, model, error: "GROQ_API_KEY is not configured." }, { status: 503 });
-  if (!probe) return Response.json({ ok: true, provider: "groq", configured: true, model, probeRequired: true }, { headers: { "Cache-Control": "no-store" } });
+  if (!probe) return Response.json({ ok: true, provider: "groq", model, probeRequired: true }, { headers: { "Cache-Control": "no-store" } });
+  if (!sameOriginAllowed(request)) return originError();
+  const rate = await checkSharedRateLimit(request, { limit: 3, windowMs: 60_000 }, "health-groq");
+  if (!rate.ok) return rateLimitResponse(rate.retryAfterSeconds);
+  if (!key) return Response.json({ ok: false, provider: "groq", model, error: "Groq connection is not configured." }, { status: 503 });
 
   const started = Date.now();
   try {
@@ -47,7 +52,6 @@ export async function GET(request: Request) {
       {
         ok: response.ok,
         provider: "groq",
-        configured: true,
         model,
         status: response.status,
         latencyMs: Date.now() - started,
@@ -60,7 +64,6 @@ export async function GET(request: Request) {
       {
         ok: false,
         provider: "groq",
-        configured: true,
         model,
         latencyMs: Date.now() - started,
         detail: error instanceof Error ? error.message : "Groq connection failed.",
