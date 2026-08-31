@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { checkRateLimit, rateLimitResponse } from "@/lib/security/rate-limit";
+import { checkSharedRateLimit, rateLimitResponse } from "@/lib/security/rate-limit";
+import { originError, sameOriginAllowed } from "@/lib/security/request";
 
 export const runtime = "nodejs";
 
@@ -21,13 +22,14 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const probe = url.searchParams.get("probe") === "1";
   const tavilyKey = process.env.TAVILY_API_KEY?.trim() || "";
-  const enabled = process.env.AMBI_WEB_SEARCH_ENABLED === "1" || Boolean(tavilyKey);
+  const enabled = process.env.AMBI_WEB_SEARCH_ENABLED === "1";
   const tavilyConfigured = Boolean(tavilyKey);
 
   if (probe) return NextResponse.json({ ok: true, enabled, provider: tavilyConfigured ? "tavily" : enabled ? "duckduckgo" : "disabled", configured: enabled, tavilyConfigured }, { headers: { "Cache-Control": "no-store" } });
   if (!enabled) return NextResponse.json({ results: [], disabled: true, provider: "disabled" }, { status: 503, headers: { "Cache-Control": "no-store" } });
 
-  const rate = checkRateLimit(request, { limit: 20, windowMs: 60_000 });
+  if (!sameOriginAllowed(request)) return originError();
+  const rate = await checkSharedRateLimit(request, { limit: 20, windowMs: 60_000 }, "search");
   if (!rate.ok) return rateLimitResponse(rate.retryAfterSeconds);
   const query = url.searchParams.get("q")?.trim() ?? "";
   if (!query || query.length > 300) return NextResponse.json({ results: [], error: "A valid research query is required." }, { status: 400 });
