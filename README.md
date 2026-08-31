@@ -30,4 +30,4 @@ npm run build
 
 ## Notes
 
-The in-memory rate limiter is process-local and is intended as a lightweight abuse-control layer. For a multi-instance production deployment, pair it with an external shared limiter.
+Sensitive API routes use a shared Upstash REST rate limiter when `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` are configured, with a bounded in-memory fallback when they are not. Sensitive POST routes also enforce same-origin requests.
