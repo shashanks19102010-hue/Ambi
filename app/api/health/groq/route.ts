@@ -9,12 +9,12 @@ function getKey() {
   return process.env.GROQ_API_KEY?.trim() || "";
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const key = getKey();
   const model = DEFAULT_CLOUD_MODEL_ID;
-  if (!key) {
-    return Response.json({ ok: false, provider: "groq", configured: false, model, error: "GROQ_API_KEY is not configured." }, { status: 503 });
-  }
+  const probe = new URL(request.url).searchParams.get("probe") === "1";
+  if (!key) return Response.json({ ok: false, provider: "groq", configured: false, model, error: "GROQ_API_KEY is not configured." }, { status: 503 });
+  if (!probe) return Response.json({ ok: true, provider: "groq", configured: true, model, probeRequired: true }, { headers: { "Cache-Control": "no-store" } });
 
   const started = Date.now();
   try {
