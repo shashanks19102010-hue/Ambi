@@ -40,9 +40,9 @@ export default function AmbiShell() {
   const activeModel = CLOUD_MODEL_CATALOG.find((model) => model.id === settings.model) ?? CLOUD_MODEL_CATALOG[0];
   const visibleConversations = useMemo(() => conversations.filter((item) => item.title.toLowerCase().includes(search.toLowerCase())), [conversations, search]);
 
-  async function refreshAiHealth() {
+  async function refreshAiHealth(probe = false) {
     try {
-      const response = await fetch("/api/health/groq", { cache: "no-store" });
+      const response = await fetch(`/api/health/groq?probe=${probe ? "1" : "0"}`, { cache: "no-store" });
       setHealth((h) => ({ ...h, inference: response.ok ? "ready" : "error", network: navigator.onLine ? "online" : "offline", safeMode: !response.ok, recovery: response.ok ? "idle" : "safe" }));
     } catch { setHealth((h) => ({ ...h, inference: "error", network: "offline", safeMode: true, recovery: "safe" })); }
   }
