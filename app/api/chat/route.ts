@@ -13,6 +13,8 @@ const MAX_MESSAGES = 40;
 const MAX_CHARS = 12000;
 const MAX_OUTPUT = 4096;
 const MAX_IMAGE_DATA_URL = 8_000_000;
+const MAX_REQUEST_BYTES = 10_000_000;
+const MAX_TOTAL_HISTORY_CHARS = 120_000;
 const VISION_MODEL = process.env.AMBI_VISION_MODEL?.trim() || "qwen/qwen3.6-27b";
 type TextContent = { type: "text"; text: string };
 type ImageContent = { type: "image_url"; image_url: { url: string } };
@@ -26,6 +28,7 @@ function key() { return process.env.GROQ_API_KEY?.trim() || ""; }
 function modelOf(value: unknown) { return typeof value === "string" && CLOUD_MODEL_CATALOG.some((m) => m.id === value) ? value : DEFAULT_CLOUD_MODEL_ID; }
 function normalize(input: unknown): HistoryMessage[] {
   if (!Array.isArray(input)) return [];
+  let totalChars = 0;
   const result: HistoryMessage[] = [];
   for (const item of input.slice(-MAX_MESSAGES)) {
     if (!item || typeof item !== "object") continue;
@@ -33,6 +36,8 @@ function normalize(input: unknown): HistoryMessage[] {
     const content = (item as { content?: unknown }).content;
     if (typeof content !== "string") continue;
     const safe = content.slice(0, MAX_CHARS);
+    if (totalChars + safe.length > MAX_TOTAL_HISTORY_CHARS) break;
+    totalChars += safe.length;
     if (role === "assistant") result.push({ role: "assistant", content: safe });
     else if (role === "user") result.push({ role: "user", content: safe });
   }
@@ -140,11 +145,18 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   if (!sameOriginAllowed(request)) return originError();
+  const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
+  if (!contentType.startsWith("application/json")) return Response.json({ error: "Content-Type must be application/json." }, { status: 415 });
+  const declaredLength = Number(request.headers.get("content-length") ?? "0");
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_REQUEST_BYTES) return Response.json({ error: "Request payload is too large." }, { status: 413 });
   const rate = await checkSharedRateLimit(request, { limit: 20, windowMs: 60_000 }, "chat");
   if (!rate.ok) return rateLimitResponse(rate.retryAfterSeconds);
   if (!key()) return Response.json({ error: "Groq API key is not configured on this deployment." }, { status: 503 });
   try {
-    const body = await request.json() as { messages?: unknown; model?: unknown; imageDataUrl?: unknown; systemExtras?: unknown; memories?: unknown; toolNotes?: unknown };
+    const rawBody = await request.text();
+    if (new TextEncoder().encode(rawBody).byteLength > MAX_REQUEST_BYTES) return Response.json({ error: "Request payload is too large." }, { status: 413 });
+    let body: { messages?: unknown; model?: unknown; imageDataUrl?: unknown; systemExtras?: unknown; memories?: unknown; toolNotes?: unknown };
+    try { body = JSON.parse(rawBody) as typeof body; } catch { return Response.json({ error: "Invalid JSON body." }, { status: 400 }); }
     const imageDataUrl = typeof body.imageDataUrl === "string" ? body.imageDataUrl : "";
     if (imageDataUrl && (!imageDataUrl.startsWith("data:image/") || imageDataUrl.length > MAX_IMAGE_DATA_URL)) return Response.json({ error: "The attached image is invalid or too large." }, { status: 400 });
     const history = normalize(body.messages);
