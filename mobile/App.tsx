@@ -27,8 +27,7 @@ type StreamEvent =
   | { type: "done" }
   | { type: "error"; message?: unknown };
 
-const API_BASE_URL = (process.env.EXPO_PUBLIC_AMBI_API_BASE_URL ?? "").trim().replace(/\/$/, "");
-const MAX_INPUT = 12_000;
+function getApiBaseUrl() {\n  const value = (process.env.EXPO_PUBLIC_AMBI_API_BASE_URL ?? "").trim().replace(/\\/$/, "");\n  try {\n    const url = new URL(value);\n    return url.protocol === "https:" ? value : "";\n  } catch {\n    return "";\n  }\n}\n\nconst API_BASE_URL = getApiBaseUrl();\nconst MAX_INPUT = 12_000;\nconst MAX_RESPONSE_BYTES = 1_000_000;
 
 function makeId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -87,7 +86,7 @@ async function askAmbi(messages: Message[], installId: string, signal: AbortSign
       signal: controller.signal,
     });
 
-    const raw = await response.text();
+    const raw = await response.text();\n    if (raw.length > MAX_RESPONSE_BYTES) throw new Error("Ambi returned an unexpectedly large response.");
     if (!response.ok) {
       let message = `Ambi API returned HTTP ${response.status}.`;
       try {
