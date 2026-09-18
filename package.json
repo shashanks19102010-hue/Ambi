@@ -2,20 +2,26 @@
   "name": "ambi",
   "version": "2.1.0",
   "private": true,
-  "scripts": { "dev":"next dev", "build":"next build", "start":"next start", "lint":"eslint .", "typecheck":"tsc --noEmit" },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
   "dependencies": {
-    "@huggingface/transformers":"3.8.1",
-    "@mlc-ai/web-llm":"0.2.84",
-    "next":"16.3.5",
-    "react":"19.2.6",
-    "react-dom":"19.2.6"
+    "@huggingface/transformers": "3.8.1",
+    "@mlc-ai/web-llm": "0.2.84",
+    "next": "16.3.5",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
   },
   "devDependencies": {
-    "@types/node":"24.10.0",
-    "@types/react":"19.2.6",
-    "@types/react-dom":"19.2.6",
-    "eslint":"9.39.0",
-    "eslint-config-next":"16.3.5",
-    "typescript":"5.9.3"
+    "@types/node": "24.10.0",
+    "@types/react": "19.2.8",
+    "@types/react-dom": "19.2.8",
+    "eslint": "9.39.0",
+    "eslint-config-next": "16.3.5",
+    "typescript": "5.9.3"
   }
 }
